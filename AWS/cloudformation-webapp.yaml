@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template to create 1 EC2 instance and an RDS MySQL database in the free tier.
+
+Resources:
+  WebAppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: 
+        - S3ReadOnlyRole
+        - WebAppRole
+
+  WebAppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+  S3ReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+
+  WebAppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      KeyName: keypairwebapp
+      SecurityGroups: [default]
+      IamInstanceProfile: 
+        Ref: WebAppInstanceProfile
+      Tags:
+        - Key: Name
+          Value: webapp
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo apt-get update -y
+          sudo apt install apache2 php libapache2-mod-php php-common php-curl php-intl php-mbstring php-json php-xmlrpc php-soap php-mysql php-gd php-xml php-cli php-zip wget mysql-client unzip git binutils ruby -y
+          sudo systemctl start apache2
+          sudo systemctl enable apache2
+          sudo systemctl restart apache2
+          wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install
+          chmod +x ./install
+          sudo ./install auto
+          sudo service codedeploy-agent start
+          sudo chmod 777 /etc/init.d/codedeploy-agent
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t2.micro
+      AllocatedStorage: 20
+      Engine: mysql
+      MasterUsername: admin
+      MasterUserPassword: 12345678
+      DBInstanceIdentifier: mydb
+      BackupRetentionPeriod: 7
+      MultiAZ: false
+      PubliclyAccessible: true
+      StorageType: gp2
+      DeletionProtection: false
