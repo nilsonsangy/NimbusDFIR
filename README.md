@@ -110,10 +110,14 @@ Contributions are welcome! Please open issues or submit pull requests for new fo
 
 ---
 
+
 ## License
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
----
+## Support
+| ☕ Support this project (EN) | ☕ Apoie este projeto (PT-BR) |
+|-----------------------------|------------------------------|
+| If this project helps you or you think it's cool, consider supporting:<br>💳 [PayPal](https://www.paypal.com/donate/?business=7CC3CMJVYYHAC&no_recurring=0&currency_code=BRL)<br>![PayPal QR code](https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://www.paypal.com/donate/?business=7CC3CMJVYYHAC&no_recurring=0&currency_code=BRL) | Se este projeto te ajuda ou você acha legal, considere apoiar:<br>🇧🇷 Pix: `df92ab3c-11e2-4437-a66b-39308f794173`<br>![Pix QR code](https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=df92ab3c-11e2-4437-a66b-39308f794173) |
 
 ## Disclaimer
 This project is for educational and research purposes only. Use responsibly and ensure compliance with your organization's policies and cloud provider terms of service. Never commit sensitive credentials or secrets to version control.
