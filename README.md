@@ -1,7 +1,8 @@
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/nilsonsangy/nimbus/main/banner.png" alt="nimbus Project Banner"/>
-</p>
+
+<div align="center">
+  <img src="https://img.shields.io/badge/Nimbus%20DFIR-Cloud%20Forensics%20%26%20Incident%20Response-blue?style=for-the-badge" alt="Nimbus DFIR Badge" />
+</div>
 
 
 
