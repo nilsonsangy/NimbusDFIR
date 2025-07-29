@@ -1,6 +1,11 @@
 import boto3
+import os
+from dotenv import load_dotenv
 
 def main():
+    # Carrega variáveis do .env na raiz do projeto
+    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+    load_dotenv(env_path)
     ec2 = boto3.client('ec2')
     sts = boto3.client('sts')
     account_id = sts.get_caller_identity()['Account']

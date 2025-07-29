@@ -1,5 +1,7 @@
 boto3
+botocore
 azure-identity
 azure-mgmt-resource
-google-cloud-compute
 google-auth
+google-cloud-compute
+python-dotenv
