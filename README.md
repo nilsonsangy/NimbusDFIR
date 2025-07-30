@@ -6,7 +6,7 @@
 
 
 
-# nimbus
+# NimbusDFIR
 
 Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud environments (AWS, Azure, GCP). This project helps investigators and cloud engineers collect, analyze, and manage forensic evidence in multi-cloud scenarios.
 
