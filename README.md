@@ -60,8 +60,9 @@ Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud 
    cd nimbus
    ```
 2. **Configure environment variables:**
-   - Copy `.env.example` to `.env` and fill in your AWS/Azure secrets.
-   - Never commit `.env` to git.
+   
+   Copy `.env.example` to `.env` and fill in your AWS/Azure secrets.
+   
 3. **Install dependencies:**
    ```sh
    pip install -r requirements.txt

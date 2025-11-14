@@ -2,7 +2,7 @@
 
 # EC2 Manager Script
 # Author: NimbusDFIR
-# Description: Manage EC2 instances - list, create, and remove instances
+# Description: Manage EC2 instances - list, create, and delete instances
 
 set -e
 
@@ -38,7 +38,7 @@ usage() {
     echo "Commands:"
     echo "  list              List all EC2 instances"
     echo "  create            Create a new EC2 instance"
-    echo "  remove            Terminate an EC2 instance"
+    echo "  delete            Terminate an EC2 instance"
     echo "  start             Start a stopped instance"
     echo "  stop              Stop a running instance"
     echo "  help              Show this help message"
@@ -46,7 +46,7 @@ usage() {
     echo "Examples:"
     echo "  $0 list"
     echo "  $0 create"
-    echo "  $0 remove i-1234567890abcdef0"
+    echo "  $0 delete i-1234567890abcdef0"
     echo "  $0 start i-1234567890abcdef0"
     echo "  $0 stop i-1234567890abcdef0"
     echo ""
@@ -159,8 +159,8 @@ create_instance() {
     fi
 }
 
-# Function to remove/terminate instance
-remove_instance() {
+# Function to delete/terminate instance
+delete_instance() {
     INSTANCE_ID=$1
     
     if [ -z "$INSTANCE_ID" ]; then
@@ -264,8 +264,8 @@ case $COMMAND in
     create)
         create_instance
         ;;
-    remove|terminate)
-        remove_instance "$@"
+    delete|terminate)
+        delete_instance "$@"
         ;;
     start)
         start_instance "$@"

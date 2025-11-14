@@ -48,7 +48,7 @@ def show_usage():
     print("Commands:")
     print("  list              List all EC2 instances")
     print("  create            Create a new EC2 instance")
-    print("  remove            Terminate an EC2 instance")
+    print("  delete            Terminate an EC2 instance")
     print("  start             Start a stopped instance")
     print("  stop              Stop a running instance")
     print("  help              Show this help message")
@@ -56,7 +56,7 @@ def show_usage():
     print("Examples:")
     print("  python ec2_manager.py list")
     print("  python ec2_manager.py create")
-    print("  python ec2_manager.py remove i-1234567890abcdef0")
+    print("  python ec2_manager.py delete i-1234567890abcdef0")
     print("  python ec2_manager.py start i-1234567890abcdef0")
     print("  python ec2_manager.py stop i-1234567890abcdef0")
     print()
@@ -199,8 +199,8 @@ def create_instance(ec2):
     except ClientError as e:
         print_color(f"✗ Failed to create instance: {e}", Colors.RED)
 
-def remove_instance(ec2, instance_id=None):
-    """Remove/terminate an EC2 instance"""
+def delete_instance(ec2, instance_id=None):
+    """Delete/terminate an EC2 instance"""
     if not instance_id:
         print_color("Available instances:", Colors.YELLOW)
         list_instances(ec2)
@@ -324,8 +324,8 @@ def main():
         list_instances(ec2)
     elif command == 'create':
         create_instance(ec2)
-    elif command in ['remove', 'terminate']:
-        remove_instance(ec2, instance_id)
+    elif command in ['delete', 'terminate']:
+        delete_instance(ec2, instance_id)
     elif command == 'start':
         start_instance(ec2, instance_id)
     elif command == 'stop':

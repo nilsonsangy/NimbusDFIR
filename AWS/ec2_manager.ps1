@@ -4,7 +4,7 @@
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet('list', 'create', 'remove', 'terminate', 'start', 'stop', 'help')]
+    [ValidateSet('list', 'create', 'delete', 'terminate', 'start', 'stop', 'help')]
     [string]$Command,
     
     [Parameter(Position=1)]
@@ -53,7 +53,7 @@ function Show-Usage {
     Write-Host "Commands:"
     Write-Host "  list              List all EC2 instances"
     Write-Host "  create            Create a new EC2 instance"
-    Write-Host "  remove            Terminate an EC2 instance"
+    Write-Host "  delete            Terminate an EC2 instance"
     Write-Host "  start             Start a stopped instance"
     Write-Host "  stop              Stop a running instance"
     Write-Host "  help              Show this help message"
@@ -61,7 +61,7 @@ function Show-Usage {
     Write-Host "Examples:"
     Write-Host "  .\ec2_manager.ps1 list"
     Write-Host "  .\ec2_manager.ps1 create"
-    Write-Host "  .\ec2_manager.ps1 remove i-1234567890abcdef0"
+    Write-Host "  .\ec2_manager.ps1 delete i-1234567890abcdef0"
     Write-Host "  .\ec2_manager.ps1 start i-1234567890abcdef0"
     Write-Host "  .\ec2_manager.ps1 stop i-1234567890abcdef0"
     Write-Host ""
@@ -178,8 +178,8 @@ function New-Ec2Instance {
     }
 }
 
-# Remove/terminate an EC2 instance
-function Remove-Ec2Instance {
+# Delete/terminate an EC2 instance
+function Delete-Ec2Instance {
     param([string]$InstanceId)
     
     if ([string]::IsNullOrWhiteSpace($InstanceId)) {
@@ -289,8 +289,8 @@ switch ($Command) {
     'create' {
         New-Ec2Instance
     }
-    { $_ -in 'remove', 'terminate' } {
-        Remove-Ec2Instance -InstanceId $InstanceId
+    { $_ -in 'delete', 'terminate' } {
+        Delete-Ec2Instance -InstanceId $InstanceId
     }
     'start' {
         Start-Ec2Instance -InstanceId $InstanceId

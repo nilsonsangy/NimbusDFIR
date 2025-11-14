@@ -1,10 +1,10 @@
 # S3 Manager Script - PowerShell
 # Author: NimbusDFIR
-# Description: Manage S3 buckets - list, create, remove, upload, download, and dump buckets
+# Description: Manage S3 buckets - list, create, delete, upload, download, and dump buckets
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet('list', 'create', 'remove', 'delete', 'upload', 'download', 'dump', 'info', 'help')]
+    [ValidateSet('list', 'create', 'delete', 'upload', 'download', 'dump', 'info', 'help')]
     [string]$Command,
     
     [Parameter(Position=1, ValueFromRemainingArguments=$true)]
@@ -53,8 +53,8 @@ function Show-Usage {
     Write-Host "Commands:"
     Write-Host "  list              List all S3 buckets"
     Write-Host "  create            Create a new S3 bucket"
-    Write-Host "  remove            Delete an S3 bucket"
-    Write-Host "  upload            Upload files to a bucket"
+    Write-Host "  delete            Delete an S3 bucket"
+    Write-Host "  upload            Upload file(s) to a bucket"
     Write-Host "  download          Download a file from a bucket"
     Write-Host "  dump              Download all files from a bucket as a zip"
     Write-Host "  info              Get bucket information"
@@ -160,8 +160,8 @@ function New-S3Bucket {
     }
 }
 
-# Remove/delete a bucket
-function Remove-S3Bucket {
+# Delete a bucket
+function Delete-S3Bucket {
     param([string]$BucketName)
     
     if ([string]::IsNullOrWhiteSpace($BucketName)) {
@@ -535,8 +535,8 @@ switch ($Command) {
     'create' {
         New-S3Bucket
     }
-    { $_ -in 'remove', 'delete' } {
-        Remove-S3Bucket -BucketName $Arguments[0]
+    'delete' {
+        Delete-S3Bucket -BucketName $Arguments[0]
     }
     'upload' {
         Add-S3Files -Files $Arguments

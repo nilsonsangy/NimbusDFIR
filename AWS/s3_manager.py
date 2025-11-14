@@ -3,7 +3,7 @@
 """
 S3 Manager Script - Python
 Author: NimbusDFIR
-Description: Manage S3 buckets - list, create, remove, upload, download, and dump buckets
+Description: Manage S3 buckets - list, create, delete, upload, download, and dump buckets
 """
 
 import boto3
@@ -53,8 +53,8 @@ def show_usage():
     print("Commands:")
     print("  list              List all S3 buckets")
     print("  create            Create a new S3 bucket")
-    print("  remove            Delete an S3 bucket")
-    print("  upload            Upload files to a bucket")
+    print("  delete            Delete an S3 bucket")
+    print("  upload            Upload file(s) to a bucket")
     print("  download          Download a file from a bucket")
     print("  dump              Download all files from a bucket as a zip")
     print("  info              Get bucket information")
@@ -196,8 +196,8 @@ def select_bucket(s3):
         print_color(f"Error: {e}", Colors.RED)
         return None
 
-def remove_bucket(s3, bucket_name=None):
-    """Remove/delete an S3 bucket"""
+def delete_bucket(s3, bucket_name=None):
+    """Delete an S3 bucket"""
     if not bucket_name:
         print_color("Available buckets:", Colors.YELLOW)
         list_buckets(s3)
@@ -480,9 +480,9 @@ def main():
         list_buckets(s3)
     elif command == 'create':
         create_bucket(s3)
-    elif command in ['remove', 'delete']:
+    elif command == 'delete':
         bucket_name = args[0] if args else None
-        remove_bucket(s3, bucket_name)
+        delete_bucket(s3, bucket_name)
     elif command == 'upload':
         files = args[:-1] if args and args[-1] else args
         bucket_name = args[-1] if args else None

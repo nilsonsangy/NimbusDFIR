@@ -2,7 +2,7 @@
 
 # S3 Manager Script
 # Author: NimbusDFIR
-# Description: Manage S3 buckets - list, create, and remove buckets
+# Description: Manage S3 buckets - list, create, and delete buckets
 
 set -e
 
@@ -38,7 +38,7 @@ usage() {
     echo "Commands:"
     echo "  list              List all S3 buckets"
     echo "  create            Create a new S3 bucket"
-    echo "  remove            Delete an S3 bucket"
+    echo "  delete            Delete an S3 bucket"
     echo "  upload            Upload files to a bucket"
     echo "  download          Download a file from a bucket"
     echo "  dump              Download all files from a bucket as a zip"
@@ -48,7 +48,7 @@ usage() {
     echo "Examples:"
     echo "  $0 list"
     echo "  $0 create"
-    echo "  $0 remove my-bucket-name"
+    echo "  $0 delete my-bucket-name"
     echo "  $0 upload ~/Pictures/* my-bucket-name"
     echo "  $0 upload ~/Documents/file.pdf"
     echo "  $0 download my-bucket-name"
@@ -148,8 +148,8 @@ create_bucket() {
     fi
 }
 
-# Function to remove/delete bucket
-remove_bucket() {
+# Function to delete bucket
+delete_bucket() {
     BUCKET_NAME=$1
     
     if [ -z "$BUCKET_NAME" ]; then
@@ -674,8 +674,8 @@ case $COMMAND in
     create)
         create_bucket
         ;;
-    remove|delete)
-        remove_bucket "$@"
+    delete)
+        delete_bucket "$@"
         ;;
     upload)
         upload_files "$@"
