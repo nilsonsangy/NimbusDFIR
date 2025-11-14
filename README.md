@@ -30,7 +30,10 @@ Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud 
 | | ec2_manager | Manage EC2 instances (list, create, start, stop, terminate) |
 | | hello_aws | Tests AWS connection and prints account ID and regions |
 | | install_aws_cli_macos | Installs AWS CLI v2 on macOS |
-| | s3_manager | Manage S3 buckets (list, create, remove, upload, download, dump) |
+| | rds_connect | Connect to RDS instances (public or private via bastion host) |
+| | rds_dump_database | Dump RDS databases with interactive or direct mode |
+| | rds_insert_mock_data | Insert mock e-commerce data into RDS databases |
+| | s3_manager | Manage S3 buckets (list, create, delete, upload, download, dump) |
 | Azure | hello_azure | Tests Azure connection and prints account info and subscriptions |
 | GCP | hello_gcp | Tests GCP connection and prints account email and regions |
 
