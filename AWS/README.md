@@ -36,7 +36,7 @@ aws --version
 Test AWS credentials and connection.
 
 ```bash
-# Test AWS connection
+# Test AWS connection (bash/python/powershell available)
 python3 hello_aws.py
 
 # Output shows:
@@ -49,9 +49,11 @@ python3 hello_aws.py
 
 ## EC2 Management
 
-### ec2_manager.sh (Bash)
+### ec2_manager.sh
+Manage EC2 instances (list, create, start, stop, terminate).
+
 ```bash
-# List all EC2 instances
+# List all EC2 instances (.sh / .ps1 / .py available)
 ./ec2_manager.sh list
 
 # Create a new instance
@@ -65,30 +67,6 @@ python3 hello_aws.py
 
 # Delete (terminate) an instance
 ./ec2_manager.sh delete i-1234567890abcdef0
-```
-
-### ec2_manager.ps1 (PowerShell)
-```powershell
-# List all EC2 instances
-.\ec2_manager.ps1 -Action list
-
-# Start an instance
-.\ec2_manager.ps1 -Action start -InstanceId i-1234567890abcdef0
-
-# Delete an instance
-.\ec2_manager.ps1 -Action delete -InstanceId i-1234567890abcdef0
-```
-
-### ec2_manager.py (Python)
-```bash
-# List instances
-python3 ec2_manager.py list
-
-# Start instance
-python3 ec2_manager.py start i-1234567890abcdef0
-
-# Stop instance
-python3 ec2_manager.py stop i-1234567890abcdef0
 ```
 
 ### ec2_evidence.ps1
@@ -198,9 +176,11 @@ Manage RDS instances lifecycle.
 
 ## S3 Management
 
-### s3_manager.sh (Bash)
+### s3_manager.sh
+Manage S3 buckets (list, create, delete, upload, download, dump).
+
 ```bash
-# List all S3 buckets
+# List all S3 buckets (.sh / .ps1 / .py available)
 ./s3_manager.sh list
 
 # Create a new bucket
@@ -217,36 +197,6 @@ Manage RDS instances lifecycle.
 
 # Delete bucket
 ./s3_manager.sh delete my-bucket
-```
-
-### s3_manager.ps1 (PowerShell)
-```powershell
-# List buckets
-.\s3_manager.ps1 -Action list
-
-# Create bucket
-.\s3_manager.ps1 -Action create -BucketName my-forensic-bucket
-
-# Upload file
-.\s3_manager.ps1 -Action upload -BucketName my-bucket -FilePath C:\evidence\file.zip
-
-# Delete bucket
-.\s3_manager.ps1 -Action delete -BucketName my-bucket
-```
-
-### s3_manager.py (Python)
-```bash
-# List buckets
-python3 s3_manager.py list
-
-# Create bucket
-python3 s3_manager.py create my-forensic-bucket
-
-# Upload file
-python3 s3_manager.py upload my-bucket /path/to/file.zip
-
-# Delete bucket
-python3 s3_manager.py delete my-bucket
 ```
 
 ### s3_bucket_evidence.py

@@ -34,7 +34,8 @@ Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud 
 | | rds_dump_database | Dump RDS databases with interactive or direct mode |
 | | rds_insert_mock_data | Insert mock e-commerce data into RDS databases |
 | | s3_manager | Manage S3 buckets (list, create, delete, upload, download, dump) |
-| Azure | hello_azure | Tests Azure connection and prints account info and subscriptions |
+| Azure | hello_az | Tests Azure connection and prints account info and subscriptions |
+| | install_azure_cli_macos | Installs Azure CLI on macOS |
 | GCP | hello_gcp | Tests GCP connection and prints account email and regions |
 
 **Note:** Scripts are available in multiple formats:
