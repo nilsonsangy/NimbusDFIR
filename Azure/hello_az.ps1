@@ -70,7 +70,8 @@ Write-Host "... (showing first 20 regions)"
 Write-Host ""
 
 # Get Azure CLI version
-$azVersion = az version --query '"azure-cli"' -o tsv
+$azVersionOutput = az version --output json | ConvertFrom-Json
+$azVersion = $azVersionOutput.'azure-cli'
 Write-Host "[INFO] Azure CLI Version: " -NoNewline -ForegroundColor Blue
 Write-Host "$azVersion" -ForegroundColor Green
 Write-Host ""

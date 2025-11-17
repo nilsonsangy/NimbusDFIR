@@ -216,21 +216,85 @@ delete_vm() {
     local VM_NAME=$1
     
     if [ -z "$VM_NAME" ]; then
-        echo -e "${RED}Error: VM name is required${NC}"
-        echo "Usage: $0 delete <vm-name>"
-        exit 1
+        # List VMs and let user choose
+        echo -e "${CYAN}Available VMs to delete:${NC}"
+        echo ""
+        
+        VMS=$(az vm list --output json 2>/dev/null)
+        
+        if [ "$VMS" == "[]" ] || [ -z "$VMS" ]; then
+            echo -e "${YELLOW}No VMs found in current subscription${NC}"
+            exit 0
+        fi
+        
+        # Get all VMs with their status
+        ALL_VMS=$(echo "$VMS" | jq -r '.[] | select(.name != null) | .name + "|" + .resourceGroup + "|" + .location')
+        
+        rm -f /tmp/all_vms.txt
+        COUNT=0
+        
+        echo "$ALL_VMS" | while IFS='|' read -r vm_name rg_name location; do
+            if [ -n "$vm_name" ]; then
+                # Get power state
+                POWER_STATE=$(az vm get-instance-view --name "$vm_name" --resource-group "$rg_name" --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" -o tsv 2>/dev/null)
+                
+                COUNT=$((COUNT + 1))
+                echo "$COUNT|$vm_name|$rg_name|$location|$POWER_STATE" >> /tmp/all_vms.txt
+            fi
+        done
+        
+        if [ ! -f /tmp/all_vms.txt ] || [ ! -s /tmp/all_vms.txt ]; then
+            echo -e "${YELLOW}No VMs found${NC}"
+            exit 0
+        fi
+        
+        # Display numbered list of all VMs with status
+        while IFS='|' read -r num vm_name rg_name location power_state; do
+            if [[ "$power_state" == *"running"* ]]; then
+                echo -e "  ${GREEN}$num. $vm_name ($rg_name) - $location [$power_state]${NC}"
+            elif [[ "$power_state" == *"stopped"* ]] || [[ "$power_state" == *"deallocated"* ]]; then
+                echo -e "  ${YELLOW}$num. $vm_name ($rg_name) - $location [$power_state]${NC}"
+            else
+                echo -e "  $num. $vm_name ($rg_name) - $location [$power_state]"
+            fi
+        done < /tmp/all_vms.txt
+        
+        TOTAL_VMS=$(wc -l < /tmp/all_vms.txt)
+        
+        echo ""
+        read -p "Select VM to delete [1-$TOTAL_VMS] or 0 to cancel: " SELECTION
+        
+        if [ "$SELECTION" == "0" ] || [ -z "$SELECTION" ]; then
+            echo -e "${YELLOW}Operation cancelled${NC}"
+            rm -f /tmp/all_vms.txt
+            exit 0
+        fi
+        
+        # Validate selection
+        if ! [[ "$SELECTION" =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 1 ] || [ "$SELECTION" -gt "$TOTAL_VMS" ]; then
+            echo -e "${RED}Invalid selection${NC}"
+            rm -f /tmp/all_vms.txt
+            exit 1
+        fi
+        
+        # Get selected VM info
+        SELECTED_LINE=$(sed -n "${SELECTION}p" /tmp/all_vms.txt)
+        VM_NAME=$(echo "$SELECTED_LINE" | cut -d'|' -f2)
+        RG_NAME=$(echo "$SELECTED_LINE" | cut -d'|' -f3)
+        
+        rm -f /tmp/all_vms.txt
+    else
+        # Find VM and get resource group
+        echo -e "${BLUE}Finding VM: $VM_NAME${NC}"
+        VM_INFO=$(az vm list --query "[?name=='$VM_NAME']" -o json)
+        
+        if [ "$VM_INFO" == "[]" ]; then
+            echo -e "${RED}Error: VM '$VM_NAME' not found${NC}"
+            exit 1
+        fi
+        
+        RG_NAME=$(echo "$VM_INFO" | jq -r '.[0].resourceGroup')
     fi
-    
-    # Find VM and get resource group
-    echo -e "${BLUE}Finding VM: $VM_NAME${NC}"
-    VM_INFO=$(az vm list --query "[?name=='$VM_NAME']" -o json)
-    
-    if [ "$VM_INFO" == "[]" ]; then
-        echo -e "${RED}Error: VM '$VM_NAME' not found${NC}"
-        exit 1
-    fi
-    
-    RG_NAME=$(echo "$VM_INFO" | jq -r '.[0].resourceGroup')
     
     echo -e "${YELLOW}VM found in resource group: $RG_NAME${NC}"
     echo ""
@@ -253,21 +317,76 @@ delete_vm() {
         # Ask to delete associated resources
         read -p "Delete associated NICs and disks? (y/n): " DELETE_RESOURCES
         if [ "$DELETE_RESOURCES" == "y" ]; then
-            echo "Cleaning up associated resources..."
+            echo -e "${YELLOW}Cleaning up all associated resources...${NC}"
+            echo ""
             
             # Delete NICs
+            echo -e "${BLUE}[INFO] Deleting Network Interfaces...${NC}"
             az network nic list --resource-group "$RG_NAME" --query "[?contains(name, '$VM_NAME')].[name]" -o tsv | while read nic; do
-                echo "Deleting NIC: $nic"
-                az network nic delete --resource-group "$RG_NAME" --name "$nic" --no-wait
+                if [ -n "$nic" ]; then
+                    echo -e "${YELLOW}  Deleting NIC: $nic${NC}"
+                    if az network nic delete --resource-group "$RG_NAME" --name "$nic"; then
+                        echo -e "${GREEN}    ✓ NIC deleted: $nic${NC}"
+                    else
+                        echo -e "${RED}    ✗ Failed to delete NIC: $nic${NC}"
+                    fi
+                fi
             done
             
-            # Delete disks
+            # Delete Public IPs
+            echo -e "${BLUE}[INFO] Deleting Public IP addresses...${NC}"
+            az network public-ip list --resource-group "$RG_NAME" --query "[?contains(name, '$VM_NAME')].[name]" -o tsv | while read public_ip; do
+                if [ -n "$public_ip" ]; then
+                    echo -e "${YELLOW}  Deleting Public IP: $public_ip${NC}"
+                    if az network public-ip delete --resource-group "$RG_NAME" --name "$public_ip"; then
+                        echo -e "${GREEN}    ✓ Public IP deleted: $public_ip${NC}"
+                    else
+                        echo -e "${RED}    ✗ Failed to delete Public IP: $public_ip${NC}"
+                    fi
+                fi
+            done
+            
+            # Delete Network Security Groups
+            echo -e "${BLUE}[INFO] Deleting Network Security Groups...${NC}"
+            az network nsg list --resource-group "$RG_NAME" --query "[?contains(name, '$VM_NAME')].[name]" -o tsv | while read nsg; do
+                if [ -n "$nsg" ]; then
+                    echo -e "${YELLOW}  Deleting NSG: $nsg${NC}"
+                    if az network nsg delete --resource-group "$RG_NAME" --name "$nsg"; then
+                        echo -e "${GREEN}    ✓ NSG deleted: $nsg${NC}"
+                    else
+                        echo -e "${RED}    ✗ Failed to delete NSG: $nsg${NC}"
+                    fi
+                fi
+            done
+            
+            # Delete Disks
+            echo -e "${BLUE}[INFO] Deleting Disks...${NC}"
             az disk list --resource-group "$RG_NAME" --query "[?contains(name, '$VM_NAME')].[name]" -o tsv | while read disk; do
-                echo "Deleting disk: $disk"
-                az disk delete --resource-group "$RG_NAME" --name "$disk" --yes --no-wait
+                if [ -n "$disk" ]; then
+                    echo -e "${YELLOW}  Deleting disk: $disk${NC}"
+                    if az disk delete --resource-group "$RG_NAME" --name "$disk" --yes; then
+                        echo -e "${GREEN}    ✓ Disk deleted: $disk${NC}"
+                    else
+                        echo -e "${RED}    ✗ Failed to delete disk: $disk${NC}"
+                    fi
+                fi
             done
             
-            echo -e "${GREEN}✓ Cleanup initiated${NC}"
+            # Delete Virtual Networks (only if they are VM-specific)
+            echo -e "${BLUE}[INFO] Checking Virtual Networks...${NC}"
+            az network vnet list --resource-group "$RG_NAME" --query "[?contains(name, '$VM_NAME')].[name]" -o tsv | while read vnet; do
+                if [ -n "$vnet" ]; then
+                    echo -e "${YELLOW}  Deleting VNET: $vnet${NC}"
+                    if az network vnet delete --resource-group "$RG_NAME" --name "$vnet"; then
+                        echo -e "${GREEN}    ✓ VNET deleted: $vnet${NC}"
+                    else
+                        echo -e "${RED}    ✗ Failed to delete VNET: $vnet${NC}"
+                    fi
+                fi
+            done
+            
+            echo ""
+            echo -e "${GREEN}✓ All resources cleanup completed${NC}"
         fi
     else
         echo -e "${RED}✗ Failed to delete VM${NC}"
@@ -280,20 +399,81 @@ start_vm() {
     local VM_NAME=$1
     
     if [ -z "$VM_NAME" ]; then
-        echo -e "${RED}Error: VM name is required${NC}"
-        echo "Usage: $0 start <vm-name>"
-        exit 1
+        # List VMs and let user choose
+        echo -e "${CYAN}Available VMs to start:${NC}"
+        echo ""
+        
+        VMS=$(az vm list --output json 2>/dev/null)
+        
+        if [ "$VMS" == "[]" ] || [ -z "$VMS" ]; then
+            echo -e "${YELLOW}No VMs found in current subscription${NC}"
+            exit 0
+        fi
+        
+        # Filter only stopped VMs
+        STOPPED_VMS=$(echo "$VMS" | jq -r '.[] | select(.name != null) | .name + "|" + .resourceGroup + "|" + .location')
+        STOPPED_LIST=""
+        COUNT=0
+        
+        rm -f /tmp/stopped_vms.txt
+        
+        echo "$STOPPED_VMS" | while IFS='|' read -r vm_name rg_name location; do
+            if [ -n "$vm_name" ]; then
+                # Get power state
+                POWER_STATE=$(az vm get-instance-view --name "$vm_name" --resource-group "$rg_name" --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" -o tsv 2>/dev/null)
+                
+                if [[ "$POWER_STATE" == *"stopped"* ]] || [[ "$POWER_STATE" == *"deallocated"* ]]; then
+                    COUNT=$((COUNT + 1))
+                    echo "$COUNT|$vm_name|$rg_name|$location" >> /tmp/stopped_vms.txt
+                fi
+            fi
+        done
+        
+        if [ ! -f /tmp/stopped_vms.txt ] || [ ! -s /tmp/stopped_vms.txt ]; then
+            echo -e "${YELLOW}No stopped VMs found to start${NC}"
+            exit 0
+        fi
+        
+        # Display numbered list of stopped VMs
+        while IFS='|' read -r num vm_name rg_name location; do
+            echo -e "  $num. $vm_name ($rg_name) - $location"
+        done < /tmp/stopped_vms.txt
+        
+        TOTAL_STOPPED=$(wc -l < /tmp/stopped_vms.txt)
+        
+        echo ""
+        read -p "Select VM to start [1-$TOTAL_STOPPED] or 0 to cancel: " SELECTION
+        
+        if [ "$SELECTION" == "0" ] || [ -z "$SELECTION" ]; then
+            echo -e "${YELLOW}Operation cancelled${NC}"
+            rm -f /tmp/stopped_vms.txt
+            exit 0
+        fi
+        
+        # Validate selection
+        if ! [[ "$SELECTION" =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 1 ] || [ "$SELECTION" -gt "$TOTAL_STOPPED" ]; then
+            echo -e "${RED}Invalid selection${NC}"
+            rm -f /tmp/stopped_vms.txt
+            exit 1
+        fi
+        
+        # Get selected VM info
+        SELECTED_LINE=$(sed -n "${SELECTION}p" /tmp/stopped_vms.txt)
+        VM_NAME=$(echo "$SELECTED_LINE" | cut -d'|' -f2)
+        RG_NAME=$(echo "$SELECTED_LINE" | cut -d'|' -f3)
+        
+        rm -f /tmp/stopped_vms.txt
+    else
+        # Find VM and get resource group
+        VM_INFO=$(az vm list --query "[?name=='$VM_NAME']" -o json)
+        
+        if [ "$VM_INFO" == "[]" ]; then
+            echo -e "${RED}Error: VM '$VM_NAME' not found${NC}"
+            exit 1
+        fi
+        
+        RG_NAME=$(echo "$VM_INFO" | jq -r '.[0].resourceGroup')
     fi
-    
-    # Find VM and get resource group
-    VM_INFO=$(az vm list --query "[?name=='$VM_NAME']" -o json)
-    
-    if [ "$VM_INFO" == "[]" ]; then
-        echo -e "${RED}Error: VM '$VM_NAME' not found${NC}"
-        exit 1
-    fi
-    
-    RG_NAME=$(echo "$VM_INFO" | jq -r '.[0].resourceGroup')
     
     echo -e "${YELLOW}Starting VM: $VM_NAME${NC}"
     az vm start --name "$VM_NAME" --resource-group "$RG_NAME"
@@ -311,20 +491,79 @@ stop_vm() {
     local VM_NAME=$1
     
     if [ -z "$VM_NAME" ]; then
-        echo -e "${RED}Error: VM name is required${NC}"
-        echo "Usage: $0 stop <vm-name>"
-        exit 1
+        # List VMs and let user choose
+        echo -e "${CYAN}Available VMs to stop:${NC}"
+        echo ""
+        
+        VMS=$(az vm list --output json 2>/dev/null)
+        
+        if [ "$VMS" == "[]" ] || [ -z "$VMS" ]; then
+            echo -e "${YELLOW}No VMs found in current subscription${NC}"
+            exit 0
+        fi
+        
+        # Filter only running VMs
+        RUNNING_VMS=$(echo "$VMS" | jq -r '.[] | select(.name != null) | .name + "|" + .resourceGroup + "|" + .location')
+        RUNNING_LIST=""
+        COUNT=0
+        
+        echo "$RUNNING_VMS" | while IFS='|' read -r vm_name rg_name location; do
+            if [ -n "$vm_name" ]; then
+                # Get power state
+                POWER_STATE=$(az vm get-instance-view --name "$vm_name" --resource-group "$rg_name" --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" -o tsv 2>/dev/null)
+                
+                if [[ "$POWER_STATE" == *"running"* ]]; then
+                    COUNT=$((COUNT + 1))
+                    echo "$COUNT|$vm_name|$rg_name|$location" >> /tmp/running_vms.txt
+                fi
+            fi
+        done
+        
+        if [ ! -f /tmp/running_vms.txt ] || [ ! -s /tmp/running_vms.txt ]; then
+            echo -e "${YELLOW}No running VMs found to stop${NC}"
+            exit 0
+        fi
+        
+        # Display numbered list of running VMs
+        while IFS='|' read -r num vm_name rg_name location; do
+            echo -e "  $num. $vm_name ($rg_name) - $location"
+        done < /tmp/running_vms.txt
+        
+        TOTAL_RUNNING=$(wc -l < /tmp/running_vms.txt)
+        
+        echo ""
+        read -p "Select VM to stop [1-$TOTAL_RUNNING] or 0 to cancel: " SELECTION
+        
+        if [ "$SELECTION" == "0" ] || [ -z "$SELECTION" ]; then
+            echo -e "${YELLOW}Operation cancelled${NC}"
+            rm -f /tmp/running_vms.txt
+            exit 0
+        fi
+        
+        # Validate selection
+        if ! [[ "$SELECTION" =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 1 ] || [ "$SELECTION" -gt "$TOTAL_RUNNING" ]; then
+            echo -e "${RED}Invalid selection${NC}"
+            rm -f /tmp/running_vms.txt
+            exit 1
+        fi
+        
+        # Get selected VM info
+        SELECTED_LINE=$(sed -n "${SELECTION}p" /tmp/running_vms.txt)
+        VM_NAME=$(echo "$SELECTED_LINE" | cut -d'|' -f2)
+        RG_NAME=$(echo "$SELECTED_LINE" | cut -d'|' -f3)
+        
+        rm -f /tmp/running_vms.txt
+    else
+        # Find VM and get resource group
+        VM_INFO=$(az vm list --query "[?name=='$VM_NAME']" -o json)
+        
+        if [ "$VM_INFO" == "[]" ]; then
+            echo -e "${RED}Error: VM '$VM_NAME' not found${NC}"
+            exit 1
+        fi
+        
+        RG_NAME=$(echo "$VM_INFO" | jq -r '.[0].resourceGroup')
     fi
-    
-    # Find VM and get resource group
-    VM_INFO=$(az vm list --query "[?name=='$VM_NAME']" -o json)
-    
-    if [ "$VM_INFO" == "[]" ]; then
-        echo -e "${RED}Error: VM '$VM_NAME' not found${NC}"
-        exit 1
-    fi
-    
-    RG_NAME=$(echo "$VM_INFO" | jq -r '.[0].resourceGroup')
     
     echo -e "${YELLOW}Stopping and deallocating VM: $VM_NAME${NC}"
     az vm deallocate --name "$VM_NAME" --resource-group "$RG_NAME"
