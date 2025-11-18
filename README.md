@@ -50,14 +50,10 @@ Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud 
 
 1. **Clone the repository:**
    ```sh
-   git clone https://github.com/nilsonsangy/nimbus.git
-   cd nimbus
+   git clone https://github.com/nilsonsangy/NimbusDFIR.git
+   cd NimbusDFIR
    ```
-2. **Configure environment variables:**
-   
-   Copy `.env.example` to `.env` and fill in your AWS/Azure secrets.
-
-3. **Install dependencies:**
+2. **Install dependencies if you intend to use the Python scripts included in this project:**
    ```sh
    pip install -r requirements.txt
    ```
