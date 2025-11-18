@@ -28,6 +28,7 @@ Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud 
 | AWS | aws_ebs_snapshot_collector | Collects EBS disk snapshots and generates SHA256 hashes |
 | | aws_ebs_snapshot_hash | Generates SHA256 hashes for EBS snapshots |
 | | ec2_manager | Manage EC2 instances (list, create, start, stop, terminate) |
+| | ec2_evidence_preservation | Digital forensics and incident response for EC2 (isolate, snapshot evidence) |
 | | hello_aws | Tests AWS connection and prints account ID and regions |
 | | install_aws_cli_macos | Installs AWS CLI v2 on macOS |
 | | rds_connect | Connect to RDS instances (public or private via bastion host) |

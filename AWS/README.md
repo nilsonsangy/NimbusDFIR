@@ -8,6 +8,7 @@ This directory contains forensic and incident response tools for AWS environment
 - [Installation AWS CLI](#installation-aws-cli)
 - [Connection Testing](#connection-testing)
 - [EC2 Management](#ec2-management)
+- [EC2 Evidence Preservation](#ec2-evidence-preservation)
 - [RDS Tools](#rds-tools)
 - [S3 Management](#s3-management)
 - [CloudTrail Investigation](#cloudtrail-investigation)
@@ -90,6 +91,53 @@ Automated forensic disk collection from EC2.
 # Specify target region
 .\forensic_disk_collection.ps1 -InstanceId i-1234567890abcdef0 -Region us-west-2
 ```
+
+---
+
+## EC2 Evidence Preservation
+
+### ec2_evidence_preservation.sh
+Digital forensics and incident response tools for EC2 instances. Provides isolation and evidence preservation capabilities.
+
+```bash
+# Isolate compromised instance (interactive selection) (.sh / .ps1 / .py available)
+./ec2_evidence_preservation.sh isolate
+
+# Isolate specific instance
+./ec2_evidence_preservation.sh isolate i-1234567890abcdef0
+
+# Create EBS snapshot for evidence preservation (interactive selection)
+./ec2_evidence_preservation.sh snapshot
+
+# Create EBS snapshot for specific instance
+./ec2_evidence_preservation.sh snapshot i-1234567890abcdef0
+
+# Delete EBS snapshot (use with caution - interactive selection)
+./ec2_evidence_preservation.sh snapshot delete
+
+# Delete specific snapshot (use with caution)
+./ec2_evidence_preservation.sh snapshot delete snap-1234567890abcdef0
+```
+
+**Key Features:**
+- **Instance Isolation**: Creates quarantine security group to block all network traffic
+- **Evidence Preservation**: Creates EBS snapshots with proper forensic tags
+- **Chain of Custody**: Generates detailed evidence reports for legal proceedings
+- **Audit Trail**: Complete logging of all actions with timestamps
+- **Interactive Mode**: User-friendly selection when no parameters provided
+- **Safety Controls**: Multiple confirmations for destructive operations
+
+**Incident Response Workflow:**
+1. Use `isolate` to quarantine compromised instance
+2. Use `snapshot` to preserve evidence
+3. Document all actions using generated reports
+4. Evidence reports saved to Downloads folder by default
+
+**⚠️ Important Security Notes:**
+- Isolation replaces ALL security groups with quarantine SG
+- Original security groups backed up to temp folder for restoration
+- Snapshot deletion requires multiple confirmations and audit logging
+- All actions generate forensic reports for legal compliance
 
 ---
 

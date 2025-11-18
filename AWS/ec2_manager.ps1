@@ -72,33 +72,70 @@ function Get-Ec2Instances {
     Write-Host "Listing EC2 Instances..." -ForegroundColor Blue
     Write-Host ""
     
-    $instances = aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,InstanceType,State.Name,PublicIpAddress,PrivateIpAddress,Tags[?Key==`Name`].Value|[0]]' --output json | ConvertFrom-Json
-    
-    if (-not $instances -or $instances.Count -eq 0) {
-        Write-Host "No EC2 instances found" -ForegroundColor Yellow
-        return
-    }
-    
-    Write-Host "Instance ID`t`tType`t`tState`t`tPublic IP`tPrivate IP`tName" -ForegroundColor Green
-    Write-Host "--------------------------------------------------------------------------------------------------------"
-    
-    foreach ($reservation in $instances) {
-        foreach ($instance in $reservation) {
-            $id = $instance[0]
-            $type = $instance[1]
-            $state = $instance[2]
-            $publicIp = if ($instance[3]) { $instance[3] } else { "N/A" }
-            $privateIp = if ($instance[4]) { $instance[4] } else { "N/A" }
-            $name = if ($instance[5]) { $instance[5] } else { "N/A" }
-            
-            $color = switch ($state) {
-                "running" { "Green" }
-                "stopped" { "Yellow" }
-                default { "White" }
-            }
-            
-            Write-Host "$id`t$type`t$state`t`t$publicIp`t$privateIp`t$name" -ForegroundColor $color
+    try {
+        # Get instances data from AWS CLI using simpler query
+        $awsOutput = aws ec2 describe-instances --output json
+        
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: Failed to retrieve EC2 instances. Please check your AWS configuration." -ForegroundColor Red
+            return
         }
+        
+        if ([string]::IsNullOrWhiteSpace($awsOutput) -or $awsOutput.Trim() -eq "{}") {
+            Write-Host "No EC2 instances found" -ForegroundColor Yellow
+            return
+        }
+        
+        $ec2Data = $awsOutput | ConvertFrom-Json
+        
+        Write-Host "`nEC2 Instances:" -ForegroundColor Green
+        Write-Host ("="*50) -ForegroundColor Green
+        
+        $instanceCount = 0
+        
+        # Parse the standard EC2 describe-instances output structure
+        foreach ($reservation in $ec2Data.Reservations) {
+            foreach ($instance in $reservation.Instances) {
+                $instanceCount++
+                
+                $id = $instance.InstanceId
+                $state = $instance.State.Name
+                
+                # Get Name tag if it exists
+                $name = "No Name"
+                if ($instance.Tags) {
+                    $nameTag = $instance.Tags | Where-Object { $_.Key -eq "Name" }
+                    if ($nameTag) {
+                        $name = $nameTag.Value
+                    }
+                }
+                
+                $color = switch ($state) {
+                    "running" { "Green" }
+                    "stopped" { "Yellow" }
+                    "stopping" { "Yellow" }
+                    "pending" { "Cyan" }
+                    "terminating" { "Red" }
+                    default { "White" }
+                }
+                
+                # Format: Instance ID | Name | State
+                Write-Host "$id | $name | " -NoNewline -ForegroundColor Cyan
+                Write-Host $state -ForegroundColor $color
+            }
+        }
+        
+        if ($instanceCount -eq 0) {
+            Write-Host "No EC2 instances found" -ForegroundColor Yellow
+        } else {
+            Write-Host ""
+            Write-Host "Total instances: $instanceCount" -ForegroundColor Blue
+        }
+        
+    } catch {
+        Write-Host "Error processing EC2 instances: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Raw AWS CLI output for debugging:" -ForegroundColor Yellow
+        Write-Host $awsOutput -ForegroundColor Gray
     }
 }
 
