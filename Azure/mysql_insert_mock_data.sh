@@ -59,11 +59,38 @@ echo "Azure MySQL Insert Mock Data"
 echo -e "==========================================${NC}"
 echo ""
 
-# Get server name
-SERVER_NAME=$1
-if [ -z "$SERVER_NAME" ]; then
-    echo -e "${CYAN}Available MySQL Servers:${NC}"
-    SERVERS=$(az mysql flexible-server list --output json 2>/dev/null)
+# Check for active SSH tunnel first
+echo -e "${BLUE}Checking for active SSH tunnel...${NC}"
+TUNNEL_ACTIVE=false
+LOCAL_PORT=3307
+
+# Check if there's an SSH process running with MySQL tunnel
+if pgrep -f "ssh.*3307.*3306" > /dev/null 2>&1; then
+    # Check if port 3307 is listening
+    if command -v lsof &> /dev/null; then
+        if lsof -i :$LOCAL_PORT > /dev/null 2>&1; then
+            TUNNEL_ACTIVE=true
+            echo -e "${GREEN}✓ Active SSH tunnel detected on port $LOCAL_PORT${NC}"
+        fi
+    elif command -v netstat &> /dev/null; then
+        if netstat -ln | grep ":$LOCAL_PORT " > /dev/null 2>&1; then
+            TUNNEL_ACTIVE=true
+            echo -e "${GREEN}✓ Active SSH tunnel detected on port $LOCAL_PORT${NC}"
+        fi
+    fi
+fi
+
+if [ "$TUNNEL_ACTIVE" != "true" ]; then
+    echo -e "${YELLOW}✗ No active SSH tunnel found${NC}"
+    echo -e "${YELLOW}Please run mysql_connect.sh first to establish tunnel, then run this script${NC}"
+    echo -e "${CYAN}Or use this script independently (will prompt for server selection)${NC}"
+    echo ""
+    
+    # Fallback to server selection mode
+    SERVER_NAME=$1
+    if [ -z "$SERVER_NAME" ]; then
+        echo -e "${CYAN}Available MySQL Servers:${NC}"
+        SERVERS=$(az mysql flexible-server list --output json 2>/dev/null)
     
     if [ "$SERVERS" == "[]" ] || [ -z "$SERVERS" ]; then
         echo -e "${YELLOW}No MySQL flexible servers found${NC}"
@@ -91,18 +118,30 @@ if [ -z "$SERVER_NAME" ]; then
     fi
 fi
 
-# Get resource group for the server
-echo ""
-echo -e "${BLUE}Finding server details...${NC}"
-SERVER_INFO=$(az mysql flexible-server list --query "[?name=='$SERVER_NAME']" -o json)
-
-if [ "$SERVER_INFO" == "[]" ]; then
-    echo -e "${RED}Error: MySQL server '$SERVER_NAME' not found${NC}"
-    exit 1
+        fi
+    else
+        echo -e "${GREEN}Using existing SSH tunnel for data insertion${NC}"
+        echo ""
+    fi
+else
+    echo -e "${GREEN}Using existing SSH tunnel for data insertion${NC}"
+    echo ""
 fi
 
-RG_NAME=$(echo "$SERVER_INFO" | jq -r '.[0].resourceGroup')
-echo -e "${GREEN}✓ Server found in resource group: $RG_NAME${NC}"
+# Get server information only if not using tunnel
+if [ "$TUNNEL_ACTIVE" != "true" ] && [ -n "$SERVER_NAME" ]; then
+    echo ""
+    echo -e "${BLUE}Finding server details...${NC}"
+    SERVER_INFO=$(az mysql flexible-server list --query "[?name=='$SERVER_NAME']" -o json)
+    
+    if [ "$SERVER_INFO" == "[]" ]; then
+        echo -e "${RED}Error: MySQL server '$SERVER_NAME' not found${NC}"
+        exit 1
+    fi
+    
+    RG_NAME=$(echo "$SERVER_INFO" | jq -r '.[0].resourceGroup')
+    echo -e "${GREEN}✓ Server found in resource group: $RG_NAME${NC}"
+fi
 
 # Get database name
 DB_NAME=$2
@@ -128,13 +167,21 @@ if [ -z "$DB_PASSWORD" ]; then
     exit 1
 fi
 
-# Create database if not exists
+# Create database
 echo ""
 echo -e "${BLUE}Creating database '$DB_NAME'...${NC}"
-az mysql flexible-server db create \
-    --resource-group "$RG_NAME" \
-    --server-name "$SERVER_NAME" \
-    --database-name "$DB_NAME" &> /dev/null || true
+
+if [ "$TUNNEL_ACTIVE" = "true" ]; then
+    # Use SSH tunnel - connect directly to localhost:3307
+    echo -e "${GREEN}Using SSH tunnel connection...${NC}"
+    MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -P $LOCAL_PORT -u "$DB_USERNAME" -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\`;" 2>/dev/null
+else
+    # Use Azure CLI method
+    az mysql flexible-server db create \
+        --resource-group "$RG_NAME" \
+        --server-name "$SERVER_NAME" \
+        --database-name "$DB_NAME" &> /dev/null || true
+fi
 
 echo -e "${GREEN}✓ Database ready${NC}"
 
@@ -266,39 +313,48 @@ INSERT INTO sale_items (sale_id, product_id, quantity, unit_price) VALUES
 UPDATE sales SET total_amount = (SELECT SUM(quantity * unit_price) FROM sale_items WHERE sale_id = @sale5_id) WHERE sale_id = @sale5_id;
 EOF
 
-# Execute SQL file using Azure CLI
+# Execute SQL file
 echo ""
 echo -e "${YELLOW}Inserting mock data... (this may take a few moments)${NC}"
 echo ""
 
-if az mysql flexible-server execute \
-    --name "$SERVER_NAME" \
-    --admin-user "$DB_USERNAME" \
-    --admin-password "$DB_PASSWORD" \
-    --database-name "$DB_NAME" \
-    --file-path "$TEMP_SQL" 2>&1 | grep -v "WARNING"; then
+SUCCESS=false
+if [ "$TUNNEL_ACTIVE" = "true" ]; then
+    # Use SSH tunnel with secure password method
+    if MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -P $LOCAL_PORT -u "$DB_USERNAME" "$DB_NAME" < "$TEMP_SQL" 2>/dev/null; then
+        SUCCESS=true
+    fi
+else
+    # Use Azure CLI method
+    if az mysql flexible-server execute \
+        --name "$SERVER_NAME" \
+        --admin-user "$DB_USERNAME" \
+        --admin-password "$DB_PASSWORD" \
+        --database-name "$DB_NAME" \
+        --file-path "$TEMP_SQL" 2>&1 | grep -v "WARNING" > /dev/null; then
+        SUCCESS=true
+    fi
+fi
+
+if [ "$SUCCESS" = "true" ]; then
     
     echo -e "${GREEN}=========================================="
     echo "✓ Mock data inserted successfully!"
     echo -e "==========================================${NC}"
     echo ""
-    echo "Server: $SERVER_NAME"
+    if [ "$TUNNEL_ACTIVE" = "true" ]; then
+        echo "Connection: SSH Tunnel (localhost:$LOCAL_PORT)"
+    else
+        echo "Server: $SERVER_NAME"
+        echo "Resource Group: $RG_NAME"
+    fi
     echo "Database: $DB_NAME"
-    echo "Resource Group: $RG_NAME"
     echo ""
     echo "Tables created:"
     echo "  - customers (10 records)"
     echo "  - products (10 records)"
     echo "  - sales (5 records)"
     echo "  - sale_items (relationship table)"
-    echo ""
-    echo -e "${CYAN}Query the data using:${NC}"
-    echo "  az mysql flexible-server execute \\"
-    echo "    --name $SERVER_NAME \\"
-    echo "    --admin-user $DB_USERNAME \\"
-    echo "    --admin-password 'your-password' \\"
-    echo "    --database-name $DB_NAME \\"
-    echo "    --querytext 'SELECT * FROM customers;'"
     echo ""
 else
     echo -e "${RED}✗ Failed to insert mock data${NC}"
@@ -319,21 +375,33 @@ echo ""
 
 # Count records in each table
 echo -e "${CYAN}Table Record Counts:${NC}"
-az mysql flexible-server execute \
-    --name "$SERVER_NAME" \
-    --admin-user "$DB_USERNAME" \
-    --admin-password "$DB_PASSWORD" \
-    --database-name "$DB_NAME" \
-    --querytext "SELECT 'Customers' as Table_Name, COUNT(*) as Total FROM customers UNION ALL SELECT 'Products', COUNT(*) FROM products UNION ALL SELECT 'Sales', COUNT(*) FROM sales UNION ALL SELECT 'Sale Items', COUNT(*) FROM sale_items;" 2>&1 | grep -v "WARNING"
+COUNT_QUERY="SELECT 'Customers' as Table_Name, COUNT(*) as Total FROM customers UNION ALL SELECT 'Products', COUNT(*) FROM products UNION ALL SELECT 'Sales', COUNT(*) FROM sales UNION ALL SELECT 'Sale Items', COUNT(*) FROM sale_items;"
+
+if [ "$TUNNEL_ACTIVE" = "true" ]; then
+    MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -P $LOCAL_PORT -u "$DB_USERNAME" "$DB_NAME" -e "$COUNT_QUERY"
+else
+    az mysql flexible-server execute \
+        --name "$SERVER_NAME" \
+        --admin-user "$DB_USERNAME" \
+        --admin-password "$DB_PASSWORD" \
+        --database-name "$DB_NAME" \
+        --querytext "$COUNT_QUERY" 2>&1 | grep -v "WARNING"
+fi
 
 echo ""
 echo -e "${CYAN}Sales Summary:${NC}"
-az mysql flexible-server execute \
-    --name "$SERVER_NAME" \
-    --admin-user "$DB_USERNAME" \
-    --admin-password "$DB_PASSWORD" \
-    --database-name "$DB_NAME" \
-    --querytext "SELECT c.customer_name AS Customer, c.city AS City, CONCAT('\$', FORMAT(s.total_amount, 2)) AS Total FROM sales s JOIN customers c ON s.customer_id = c.customer_id ORDER BY s.sale_id;" 2>&1 | grep -v "WARNING"
+SALES_QUERY="SELECT c.customer_name AS Customer, c.city AS City, CONCAT('\$', FORMAT(s.total_amount, 2)) AS Total FROM sales s JOIN customers c ON s.customer_id = c.customer_id ORDER BY s.sale_id;"
+
+if [ "$TUNNEL_ACTIVE" = "true" ]; then
+    MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -P $LOCAL_PORT -u "$DB_USERNAME" "$DB_NAME" -e "$SALES_QUERY"
+else
+    az mysql flexible-server execute \
+        --name "$SERVER_NAME" \
+        --admin-user "$DB_USERNAME" \
+        --admin-password "$DB_PASSWORD" \
+        --database-name "$DB_NAME" \
+        --querytext "$SALES_QUERY" 2>&1 | grep -v "WARNING"
+fi
 
 echo ""
 echo -e "${GREEN}All operations completed successfully!${NC}"
