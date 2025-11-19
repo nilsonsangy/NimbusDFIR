@@ -144,13 +144,13 @@ Digital forensics and incident response tools for EC2 instances. Provides isolat
 ## RDS Tools
 
 ### rds_connect.sh
-Connect to RDS instances (public or private). Creates SSH tunnel via bastion host for private RDS.
+Connect to RDS instances (public or private). Creates SSH tunnel via jump server for private RDS.
 
 ```bash
 # Connect to a public RDS instance
 ./rds_connect.sh my-rds-instance
 
-# Connect to a private RDS instance (automatically creates bastion)
+# Connect to a private RDS instance (automatically creates jump server)
 ./rds_connect.sh my-private-rds-instance
 
 # Once connected, use MySQL client:

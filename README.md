@@ -31,12 +31,16 @@ Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud 
 | | ec2_evidence_preservation | Digital forensics and incident response for EC2 (isolate, snapshot evidence) |
 | | hello_aws | Tests AWS connection and prints account ID and regions |
 | | install_aws_cli_macos | Installs AWS CLI v2 on macOS |
-| | rds_connect | Connect to RDS instances (public or private via bastion host) |
+| | install_aws_cli_windows | Installs AWS CLI on Windows with automatic configuration |
+| | rds_connect | Connect to RDS instances (public or private via jump server) |
 | | rds_dump_database | Dump RDS databases with interactive or direct mode |
 | | rds_insert_mock_data | Insert mock e-commerce data into RDS databases |
 | | s3_manager | Manage S3 buckets (list, create, delete, upload, download, dump) |
 | Azure | hello_az | Tests Azure connection and prints account info and subscriptions |
 | | install_azure_cli_macos | Installs Azure CLI on macOS |
+| | install_azure_cli_windows | Installs Azure CLI on Windows with automatic configuration |
+| | install_mysql_windows | Installs MySQL Community Server on Windows with PATH configuration |
+| | mysql_connect | Connect to Azure MySQL Flexible Server (public or private via jump server) |
 | GCP | hello_gcp | Tests GCP connection and prints account email and regions |
 
 **Note:** Scripts are available in multiple formats:

@@ -3,7 +3,7 @@
 # Azure MySQL Connect Script
 # Author: NimbusDFIR
 # Description: Connect to Azure MySQL Flexible Server - handles both public and private instances
-#              Creates a bastion VM for private MySQL access
+#              Creates a jump server VM for private MySQL access
 
 set -e
 
@@ -49,7 +49,7 @@ usage() {
     echo "Description:"
     echo "  Connects to an Azure MySQL Flexible Server"
     echo "  - For public servers: connects directly"
-    echo "  - For private servers: creates Azure VM bastion with SSH tunnel"
+    echo "  - For private servers: creates Azure VM jump server with SSH tunnel"
     echo ""
     echo "Examples:"
     echo "  $0 my-mysql-server"
@@ -107,7 +107,7 @@ get_server_info() {
         
         if [ "$FIREWALL_RULES" == "0" ]; then
             echo -e "${YELLOW}Warning: Server has public access enabled but no firewall rules${NC}"
-            echo -e "${YELLOW}Treating as private server - will use bastion${NC}"
+            echo -e "${YELLOW}Treating as private server - will use jump server${NC}"
             SERVER_PUBLIC="Disabled"
         fi
     fi
@@ -150,76 +150,76 @@ connect_public_mysql() {
     fi
 }
 
-# Function to create Azure VM bastion instance
-create_bastion_vm() {
-    echo -e "${YELLOW}Server is private - checking for existing bastion...${NC}"
+# Function to create Azure VM jump server instance
+create_jumpserver_vm() {
+    echo -e "${YELLOW}Server is private - checking for existing jump server...${NC}"
     echo ""
     
-    BASTION_RG="$SERVER_RG"
-    BASTION_LOCATION="$SERVER_LOCATION"
-    
-    # Check for existing bastion VMs
-    EXISTING_BASTIONS=$(az vm list \
-        --resource-group "$BASTION_RG" \
-        --query "[?starts_with(name, 'mysql-bastion')].{name:name, state:powerState, ip:publicIps}" \
+    JUMPSERVER_RG="$SERVER_RG"
+    JUMPSERVER_LOCATION="$SERVER_LOCATION"
+
+    # Check for existing jump server VMs
+    EXISTING_JUMPSERVERS=$(az vm list \
+        --resource-group "$JUMPSERVER_RG" \
+        --query "[?starts_with(name, 'mysql-jumpserver')].{name:name, state:powerState, ip:publicIps}" \
         -o json 2>/dev/null)
     
-    if [ "$EXISTING_BASTIONS" != "[]" ] && [ -n "$EXISTING_BASTIONS" ]; then
-        # Found existing bastion(s)
-        BASTION_COUNT=$(echo "$EXISTING_BASTIONS" | jq 'length')
+    if [ "$EXISTING_JUMPSERVERS" != "[]" ] && [ -n "$EXISTING_JUMPSERVERS" ]; then
+        # Found existing jump server(s)
+        JUMPSERVER_COUNT=$(echo "$EXISTING_JUMPSERVERS" | jq 'length')
         
-        if [ "$BASTION_COUNT" -gt 0 ]; then
-            echo -e "${GREEN}Found $BASTION_COUNT existing bastion VM(s)${NC}"
-            echo "$EXISTING_BASTIONS" | jq -r '.[] | "\(.name) - \(.state) - \(.ip)"' | nl -w2 -s'. '
-            echo ""
-            read -p "Use existing bastion? (Y/n): " USE_EXISTING
+        if [ "$JUMPSERVER_COUNT" -gt 0 ]; then
+            echo -e "${GREEN}Found $JUMPSERVER_COUNT existing jump server VM(s)${NC}"
+            echo "$EXISTING_JUMPSERVERS" | jq -r '.[] | "\(.name) - \(.state) - \(.ip)"' | nl -w2 -s'. '
+            echo
+            read -p "Use existing jump server? (Y/n): " USE_EXISTING
             
             if [[ ! "$USE_EXISTING" =~ ^[Nn]$ ]]; then
-                # Use first running bastion or first bastion if none running
-                BASTION_NAME=$(echo "$EXISTING_BASTIONS" | jq -r '.[0].name')
-                BASTION_STATE=$(echo "$EXISTING_BASTIONS" | jq -r '.[0].state')
+                # Use first running jump server or first jump server if none running
+                JUMPSERVER_NAME=$(echo "$EXISTING_JUMPSERVERS" | jq -r '.[0].name')
+                JUMPSERVER_STATE=$(echo "$EXISTING_JUMPSERVERS" | jq -r '.[0].state')
                 
                 # Get public IP
-                BASTION_PUBLIC_IP=$(az vm show \
-                    --resource-group "$BASTION_RG" \
-                    --name "$BASTION_NAME" \
+                JUMPSERVER_PUBLIC_IP=$(az vm show \
+                    --resource-group "$JUMPSERVER_RG" \
+                    --name "$JUMPSERVER_NAME" \
                     --show-details \
                     --query publicIps \
                     -o tsv 2>/dev/null)
                 
                 # Start VM if it's stopped
-                if [[ "$BASTION_STATE" == *"stopped"* ]] || [[ "$BASTION_STATE" == *"deallocated"* ]]; then
-                    echo -e "${YELLOW}Starting existing bastion VM: $BASTION_NAME${NC}"
-                    az vm start --resource-group "$BASTION_RG" --name "$BASTION_NAME" --no-wait
+                if [[ "$JUMPSERVER_STATE" == *"stopped"* ]] || [[ "$JUMPSERVER_STATE" == *"deallocated"* ]]; then
+                    echo -e "${YELLOW}Starting existing jump server VM: $JUMPSERVER_NAME${NC}"
+                    az vm start --resource-group "$JUMPSERVER_RG" --name "$JUMPSERVER_NAME" --no-wait
                     sleep 10
                     
                     # Get public IP after starting
-                    BASTION_PUBLIC_IP=$(az vm show \
-                        --resource-group "$BASTION_RG" \
-                        --name "$BASTION_NAME" \
+                    JUMPSERVER_PUBLIC_IP=$(az vm show \
+                        --resource-group "$JUMPSERVER_RG" \
+                        --name "$JUMPSERVER_NAME" \
                         --show-details \
                         --query publicIps \
-                        -o tsv)
+                        -o tsv 2>/dev/null)
                 fi
                 
-                echo -e "${GREEN}✓ Using existing bastion VM: $BASTION_NAME${NC}"
-                echo "Public IP: $BASTION_PUBLIC_IP"
+                echo -e "${GREEN}✓ Using existing jump server VM: $JUMPSERVER_NAME${NC}"
+                echo "Public IP: $JUMPSERVER_PUBLIC_IP"
                 echo ""
                 
                 # Save info - will be cleaned up on exit
-                echo "$BASTION_NAME|$BASTION_RG|$BASTION_PUBLIC_IP" > /tmp/azure_mysql_bastion_info.txt
+                echo "$JUMPSERVER_NAME|$JUMPSERVER_RG|$JUMPSERVER_PUBLIC_IP" > /tmp/azure_mysql_jumpserver_info.txt
                 
                 # Export for use in connect function
-                export BASTION_VM_NAME="$BASTION_NAME"
-                export BASTION_VM_RG="$BASTION_RG"
-                export BASTION_VM_IP="$BASTION_PUBLIC_IP"
+                export JUMPSERVER_VM_NAME="$JUMPSERVER_NAME"
+                export JUMPSERVER_VM_RG="$JUMPSERVER_RG"
+                export JUMPSERVER_VM_IP="$JUMPSERVER_PUBLIC_IP"
                 return 0
             fi
         fi
     fi
     
-    # Create new bastion VM
-    echo -e "${YELLOW}Creating new Azure VM bastion instance...${NC}"
+    # Create new jump server VM
+    echo -e "${YELLOW}Creating new Azure VM jump server instance...${NC}"
     echo ""
     
     # Generate unique name
@@ -229,78 +229,78 @@ create_bastion_vm() {
     az group show --name "$BASTION_RG" &> /dev/null || \
         az group create --name "$BASTION_RG" --location "$BASTION_LOCATION" --output none
     
-    echo "Creating bastion VM: $BASTION_NAME"
-    echo "Location: $BASTION_LOCATION"
-    echo "Resource Group: $BASTION_RG"
+    echo "Creating jump server VM: $JUMPSERVER_NAME"
+    echo "Location: $JUMPSERVER_LOCATION"
+    echo "Resource Group: $JUMPSERVER_RG"
     echo ""
     
     # Create VM with SSH key
     echo "Launching VM (this may take 2-3 minutes)..."
     
     VM_OUTPUT=$(az vm create \
-        --resource-group "$BASTION_RG" \
-        --name "$BASTION_NAME" \
-        --location "$BASTION_LOCATION" \
+        --resource-group "$JUMPSERVER_RG" \
+        --name "$JUMPSERVER_NAME" \
+        --location "$JUMPSERVER_LOCATION" \
         --image Ubuntu2204 \
         --size Standard_B1s \
         --admin-username azureuser \
         --generate-ssh-keys \
         --public-ip-sku Standard \
-        --public-ip-address "${BASTION_NAME}-ip" \
-        --nsg "${BASTION_NAME}-nsg" \
+        --public-ip-address "${JUMPSERVER_NAME}-ip" \
+        --nsg "${JUMPSERVER_NAME}-nsg" \
         --nsg-rule SSH \
-        --output json 2>&1)
+        --output json)
     
     # Extract JSON part (skip warnings at the beginning)
     VM_JSON=$(echo "$VM_OUTPUT" | sed -n '/{/,/}/p')
     
     # Check if we got valid JSON
     if [ -z "$VM_JSON" ] || ! echo "$VM_JSON" | jq empty 2>/dev/null; then
-        echo -e "${RED}Error: Failed to create bastion VM${NC}"
+        echo -e "${RED}Error: Failed to create jump server VM${NC}"
         echo "Error details:"
         echo "$VM_OUTPUT"
         exit 1
     fi
     
-    BASTION_PUBLIC_IP=$(echo "$VM_JSON" | jq -r '.publicIpAddress // empty')
-    BASTION_PRIVATE_IP=$(echo "$VM_JSON" | jq -r '.privateIpAddress // empty')
-    
-    if [ -z "$BASTION_PUBLIC_IP" ]; then
-        echo -e "${RED}Error: Failed to get bastion VM public IP${NC}"
+    JUMPSERVER_PUBLIC_IP=$(echo "$VM_JSON" | jq -r '.publicIpAddress // empty')
+    JUMPSERVER_PRIVATE_IP=$(echo "$VM_JSON" | jq -r '.privateIpAddress // empty')
+
+    if [ -z "$JUMPSERVER_PUBLIC_IP" ]; then
+        echo -e "${RED}Error: Failed to get jump server VM public IP${NC}"
         echo "VM creation output:"
         echo "$VM_JSON" | jq '.'
         exit 1
     fi
     
-    echo -e "${GREEN}✓ Bastion VM created successfully${NC}"
-    echo "Public IP: $BASTION_PUBLIC_IP"
-    echo "Private IP: $BASTION_PRIVATE_IP"
+    echo -e "${GREEN}✓ Jump server VM created successfully${NC}"
+    echo "Public IP: $JUMPSERVER_PUBLIC_IP"
+    echo "Private IP: $JUMPSERVER_PRIVATE_IP"
     echo ""
     
     # Save cleanup info - will be cleaned up on exit
-    echo "$BASTION_NAME|$BASTION_RG|$BASTION_PUBLIC_IP" > /tmp/azure_mysql_bastion_info.txt
+    echo "$JUMPSERVER_NAME|$JUMPSERVER_RG|$JUMPSERVER_PUBLIC_IP" > /tmp/azure_mysql_jumpserver_info.txt
     
     # Export for use in connect function
-    export BASTION_VM_NAME="$BASTION_NAME"
-    export BASTION_VM_RG="$BASTION_RG"
-    export BASTION_VM_IP="$BASTION_PUBLIC_IP"
+    export JUMPSERVER_VM_NAME="$JUMPSERVER_NAME"
+    export JUMPSERVER_VM_RG="$JUMPSERVER_RG"
+    export JUMPSERVER_VM_IP="$JUMPSERVER_PUBLIC_IP"
 }
 
-# Function to connect via SSH tunnel through bastion VM
-connect_via_bastion() {
-    local BASTION_IP=$1
-    local BASTION_RG=$2
-    local BASTION_NAME=$3
+# Function to connect via SSH tunnel through jump server VM
+connect_via_jumpserver() {
+    local JUMPSERVER_IP=$1
+    local JUMPSERVER_RG=$2
+    local JUMPSERVER_NAME=$3
     
     echo ""
-    echo -e "${BLUE}Setting up SSH tunnel to MySQL through bastion VM...${NC}"
+    echo -e "${BLUE}Setting up SSH tunnel to MySQL through jump server VM...${NC}"
     echo ""
     echo "Waiting for VM to be fully ready (this may take 30-60 seconds)..."
     
     # Wait for SSH to be ready
     SSH_READY=false
     for i in {1..60}; do
-        if ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o ConnectionAttempts=1 azureuser@"$BASTION_IP" "echo SSH ready" &> /dev/null; then
+        if ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o ConnectionAttempts=1 azureuser@"$JUMPSERVER_IP" "echo SSH ready" &> /dev/null; then
             echo -e "${GREEN}✓ SSH connection established${NC}"
             SSH_READY=true
             break
@@ -313,23 +313,23 @@ connect_via_bastion() {
     
     if [ "$SSH_READY" = false ]; then
         echo -e "${RED}Error: SSH connection timeout${NC}"
-        echo "The bastion VM may not be accessible. Checking VM status..."
-        az vm show --resource-group "$BASTION_RG" --name "$BASTION_NAME" --query "powerState" -o tsv
+        echo "The jump server VM may not be accessible. Checking VM status..."
+        az vm show --resource-group "$JUMPSERVER_RG" --name "$JUMPSERVER_NAME" --query "powerState" -o tsv
         exit 1
     fi
     echo ""
     
-    # Add firewall rule for bastion VM to access MySQL
-    echo -e "${YELLOW}Adding firewall rule for bastion VM...${NC}"
-    BASTION_PUBLIC_IP_FOR_FW=$(echo "$BASTION_IP")
-    RULE_NAME="bastion-access-$(date +%s)"
+    # Add firewall rule for jump server VM to access MySQL
+    echo -e "${YELLOW}Adding firewall rule for jump server VM...${NC}"
+    JUMPSERVER_PUBLIC_IP_FOR_FW=$(echo "$JUMPSERVER_IP")
+    RULE_NAME="jumpserver-access-$(date +%s)"
     
     az mysql flexible-server firewall-rule create \
         --resource-group "$SERVER_RG" \
         --name "$SERVER_NAME" \
         --rule-name "$RULE_NAME" \
-        --start-ip-address "$BASTION_PUBLIC_IP_FOR_FW" \
-        --end-ip-address "$BASTION_PUBLIC_IP_FOR_FW" \
+        --start-ip-address "$JUMPSERVER_PUBLIC_IP_FOR_FW" \
+        --end-ip-address "$JUMPSERVER_PUBLIC_IP_FOR_FW" \
         --output none
     
     echo -e "${GREEN}✓ Firewall rule created${NC}"
@@ -360,12 +360,12 @@ connect_via_bastion() {
 ===========================================${NC}"
     echo "Local Port: $LOCAL_PORT"
     echo "Remote MySQL: $SERVER_FQDN:3306"
-    echo "Bastion: $BASTION_IP"
+    echo "Jump Server: $JUMPSERVER_IP"
     echo ""
     echo -e "${YELLOW}Starting SSH tunnel in background...${NC}"
     
     # Start SSH tunnel in background
-    ssh -i ~/.ssh/id_rsa -f -N -L "$LOCAL_PORT:$SERVER_FQDN:3306" -o StrictHostKeyChecking=no azureuser@"$BASTION_IP"
+    ssh -i ~/.ssh/id_rsa -f -N -L "$LOCAL_PORT:$SERVER_FQDN:3306" -o StrictHostKeyChecking=no azureuser@"$JUMPSERVER_IP"
     
     sleep 2
     
@@ -402,25 +402,25 @@ connect_via_bastion() {
     pkill -f "ssh.*$LOCAL_PORT:$SERVER_FQDN:3306" 2>/dev/null || true
 }
 
-# Function to cleanup bastion resources
-cleanup_bastion() {
-    if [ -f /tmp/azure_mysql_bastion_info.txt ]; then
+# Function to cleanup jump server resources
+cleanup_jumpserver() {
+    if [ -f /tmp/azure_mysql_jumpserver_info.txt ]; then
         echo ""
-        echo -e "${YELLOW}Cleaning up bastion resources...${NC}"
+        echo -e "${YELLOW}Cleaning up jump server resources...${NC}"
         
-        IFS='|' read -r BASTION_NAME BASTION_RG BASTION_IP < /tmp/azure_mysql_bastion_info.txt
+        IFS='|' read -r JUMPSERVER_NAME JUMPSERVER_RG JUMPSERVER_IP < /tmp/azure_mysql_jumpserver_info.txt
         
-        if [ -n "$BASTION_NAME" ] && [ -n "$BASTION_RG" ]; then
-            echo "Deleting bastion VM and all associated resources: $BASTION_NAME"
+        if [ -n "$JUMPSERVER_NAME" ] && [ -n "$JUMPSERVER_RG" ]; then
+            echo "Deleting jump server VM and all associated resources: $JUMPSERVER_NAME"
             
             # Get all resource IDs associated with the bastion VM
             echo "Collecting all resources to delete..."
             
             # Delete VM first (this will trigger deletion of some dependencies)
-            echo "  - Deleting VM: $BASTION_NAME"
+            echo "  - Deleting VM: $JUMPSERVER_NAME"
             az vm delete \
-                --resource-group "$BASTION_RG" \
-                --name "$BASTION_NAME" \
+                --resource-group "$JUMPSERVER_RG" \
+                --name "$JUMPSERVER_NAME" \
                 --yes \
                 --force-deletion yes \
                 --output none 2>/dev/null || true
@@ -431,10 +431,10 @@ cleanup_bastion() {
             
             # Delete NIC (must be deleted before VNET)
             echo "  - Deleting network interface(s)..."
-            NIC_NAMES=$(az network nic list --resource-group "$BASTION_RG" --query "[?contains(name, '$BASTION_NAME')].name" -o tsv)
+            NIC_NAMES=$(az network nic list --resource-group "$JUMPSERVER_RG" --query "[?contains(name, '$JUMPSERVER_NAME')].name" -o tsv)
             for NIC_NAME in $NIC_NAMES; do
                 az network nic delete \
-                    --resource-group "$BASTION_RG" \
+                    --resource-group "$JUMPSERVER_RG" \
                     --name "$NIC_NAME" \
                     --output none 2>/dev/null || true
             done
@@ -442,23 +442,23 @@ cleanup_bastion() {
             # Delete Public IP
             echo "  - Deleting public IP..."
             az network public-ip delete \
-                --resource-group "$BASTION_RG" \
-                --name "${BASTION_NAME}-ip" \
+                --resource-group "$JUMPSERVER_RG" \
+                --name "${JUMPSERVER_NAME}-ip" \
                 --output none 2>/dev/null || true
             
             # Delete NSG
             echo "  - Deleting network security group..."
             az network nsg delete \
-                --resource-group "$BASTION_RG" \
-                --name "${BASTION_NAME}-nsg" \
+                --resource-group "$JUMPSERVER_RG" \
+                --name "${JUMPSERVER_NAME}-nsg" \
                 --output none 2>/dev/null || true
             
             # Delete Disk
             echo "  - Deleting disk(s)..."
-            DISK_NAMES=$(az disk list --resource-group "$BASTION_RG" --query "[?contains(name, '$BASTION_NAME')].name" -o tsv)
+            DISK_NAMES=$(az disk list --resource-group "$JUMPSERVER_RG" --query "[?contains(name, '$JUMPSERVER_NAME')].name" -o tsv)
             for DISK_NAME in $DISK_NAMES; do
                 az disk delete \
-                    --resource-group "$BASTION_RG" \
+                    --resource-group "$JUMPSERVER_RG" \
                     --name "$DISK_NAME" \
                     --yes \
                     --output none 2>/dev/null || true
@@ -469,23 +469,23 @@ cleanup_bastion() {
             
             # Delete VNET (must be last, after all NICs are deleted)
             echo "  - Deleting virtual network..."
-            VNET_NAMES=$(az network vnet list --resource-group "$BASTION_RG" --query "[?contains(name, '$BASTION_NAME')].name" -o tsv)
+            VNET_NAMES=$(az network vnet list --resource-group "$JUMPSERVER_RG" --query "[?contains(name, '$JUMPSERVER_NAME')].name" -o tsv)
             for VNET_NAME in $VNET_NAMES; do
                 az network vnet delete \
-                    --resource-group "$BASTION_RG" \
+                    --resource-group "$JUMPSERVER_RG" \
                     --name "$VNET_NAME" \
                     --output none 2>/dev/null || true
             done
             
-            echo -e "${GREEN}✓ All bastion resources deleted${NC}"
+            echo -e "${GREEN}✓ All jump server resources deleted${NC}"
         fi
         
-        rm -f /tmp/azure_mysql_bastion_info.txt
+        rm -f /tmp/azure_mysql_jumpserver_info.txt
     fi
 }
 
 # Trap to cleanup on exit
-trap cleanup_bastion EXIT INT TERM
+trap cleanup_jumpserver EXIT INT TERM
 
 # Main script logic
 if [ "$1" == "help" ] || [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
@@ -538,8 +538,8 @@ echo ""
 if [ "$SERVER_PUBLIC" == "Enabled" ]; then
     connect_public_mysql
 else
-    create_bastion_vm
-    connect_via_bastion "$BASTION_VM_IP" "$BASTION_VM_RG" "$BASTION_VM_NAME"
+    create_jumpserver_vm
+    connect_via_jumpserver "$JUMPSERVER_VM_IP" "$JUMPSERVER_VM_RG" "$JUMPSERVER_VM_NAME"
 fi
 
 echo ""

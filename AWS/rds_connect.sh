@@ -3,7 +3,7 @@
 # RDS Connect Script
 # Author: NimbusDFIR
 # Description: Connect to RDS MySQL database - handles both public and private instances
-#              Creates a bastion EC2 instance for private RDS access
+#              Creates a jump server EC2 instance for private RDS access
 
 set -e
 
@@ -48,7 +48,7 @@ usage() {
     echo "Description:"
     echo "  Connects to an RDS MySQL database"
     echo "  - For public databases: connects directly"
-    echo "  - For private databases: creates EC2 bastion with SSH tunnel"
+    echo "  - For private databases: creates EC2 jump server with SSH tunnel"
     echo ""
     echo "Examples:"
     echo "  $0 my-database"
@@ -143,9 +143,9 @@ connect_public_rds() {
     fi
 }
 
-# Function to create EC2 bastion instance
-create_bastion_instance() {
-    echo -e "${YELLOW}Database is private - creating EC2 bastion instance...${NC}"
+# Function to create EC2 jump server instance
+create_jumpserver_instance() {
+    echo -e "${YELLOW}Database is private - creating EC2 jump server instance...${NC}"
     echo ""
     
     # Get default VPC subnet in the same VPC as RDS
@@ -178,13 +178,13 @@ create_bastion_instance() {
     
     echo "Using AMI: $AMI_ID"
     
-    # Create or get security group for bastion
-    BASTION_SG_NAME="rds-bastion-sg-$(date +%s)"
-    echo "Creating security group: $BASTION_SG_NAME"
+    # Create or get security group for jump server
+    JUMPSERVER_SG_NAME="rds-jumpserver-sg-$(date +%s)"
+    echo "Creating security group: $JUMPSERVER_SG_NAME"
     
-    BASTION_SG_ID=$(aws ec2 create-security-group \
-        --group-name "$BASTION_SG_NAME" \
-        --description "Bastion host for RDS access" \
+    JUMPSERVER_SG_ID=$(aws ec2 create-security-group \
+        --group-name "$JUMPSERVER_SG_NAME" \
+        --description "Jump server for RDS access" \
         --vpc-id "$DB_VPC" \
         --query 'GroupId' \
         --output text)
@@ -198,7 +198,7 @@ create_bastion_instance() {
     if [[ "$CURRENT_IP" =~ : ]]; then
         # IPv6 address
         aws ec2 authorize-security-group-ingress \
-            --group-id "$BASTION_SG_ID" \
+            --group-id "$JUMPSERVER_SG_ID" \
             --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,Ipv6Ranges="[{CidrIpv6=$CURRENT_IP/128}]" &> /dev/null || true
     else
         # IPv4 address
@@ -206,7 +206,7 @@ create_bastion_instance() {
             CURRENT_IP="$CURRENT_IP/32"
         fi
         aws ec2 authorize-security-group-ingress \
-            --group-id "$BASTION_SG_ID" \
+            --group-id "$JUMPSERVER_SG_ID" \
             --protocol tcp \
             --port 22 \
             --cidr "$CURRENT_IP" &> /dev/null || true
@@ -215,7 +215,7 @@ create_bastion_instance() {
     # Also allow from 0.0.0.0/0 as fallback (can be removed later for security)
     echo "Adding fallback SSH rule (0.0.0.0/0) for connectivity"
     aws ec2 authorize-security-group-ingress \
-        --group-id "$BASTION_SG_ID" \
+        --group-id "$JUMPSERVER_SG_ID" \
         --protocol tcp \
         --port 22 \
         --cidr "0.0.0.0/0" &> /dev/null || true

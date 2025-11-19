@@ -1,4 +1,4 @@
-# Azure CLI Installation Script for Windows
+# AWS CLI Installation Script for Windows
 # Author: NimbusDFIR
 
 param()
@@ -18,56 +18,6 @@ function Get-SystemArchitecture {
     }
 }
 
-function Set-AzureCLIPath {
-    Write-Host "Configuring Azure CLI PATH..." -ForegroundColor Gray
-    
-    $commonPaths = @(
-        "C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin",
-        "C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin",
-        "$env:LOCALAPPDATA\Programs\Azure CLI\wbin"
-    )
-    
-    $azureCLIPath = $null
-    foreach ($path in $commonPaths) {
-        if (Test-Path "$path\az.cmd") {
-            $azureCLIPath = $path
-            Write-Host "Found Azure CLI at: $azureCLIPath" -ForegroundColor Gray
-            break
-        }
-    }
-    
-    if (-not $azureCLIPath) {
-        Write-Host "Warning: Azure CLI installation directory not found" -ForegroundColor Yellow
-        return $false
-    }
-    
-    # Get current system PATH
-    try {
-        $currentPath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
-        
-        # Check if Azure CLI path is already in system PATH
-        if ($currentPath -notlike "*$azureCLIPath*") {
-            Write-Host "Adding Azure CLI to system PATH..." -ForegroundColor Gray
-            $newPath = "$currentPath;$azureCLIPath"
-            
-            # Set system PATH permanently
-            [Environment]::SetEnvironmentVariable("PATH", $newPath, "Machine")
-            Write-Host "✓ Azure CLI added to system PATH" -ForegroundColor Green
-            
-            # Update current session PATH
-            $env:PATH = $newPath
-        } else {
-            Write-Host "✓ Azure CLI already in system PATH" -ForegroundColor Green
-        }
-        
-        return $true
-    }
-    catch {
-        Write-Host "Error configuring PATH: $($_.Exception.Message)" -ForegroundColor Red
-        return $false
-    }
-}
-
 if (-NOT (Test-Administrator)) {
     Write-Host "Administrator privileges required. Requesting elevation..." -ForegroundColor Yellow
     
@@ -84,17 +34,17 @@ if (-NOT (Test-Administrator)) {
     }
 }
 
-Write-Host "Azure CLI Installation Script" -ForegroundColor Blue
+Write-Host "AWS CLI Installation Script" -ForegroundColor Blue
 Write-Host "Running with administrator privileges" -ForegroundColor Green
 Write-Host ""
 
-# Check if Azure CLI is already installed
-$azInstalled = Get-Command az -ErrorAction SilentlyContinue
+# Check if AWS CLI is already installed
+$awsInstalled = Get-Command aws -ErrorAction SilentlyContinue
 
-if ($azInstalled) {
+if ($awsInstalled) {
     try {
-        $currentVersion = (az version --query '"azure-cli"' -o tsv 2>$null)
-        Write-Host "Azure CLI is already installed (version: $currentVersion)" -ForegroundColor Yellow
+        $currentVersion = (aws --version 2>$null)
+        Write-Host "AWS CLI is already installed: $currentVersion" -ForegroundColor Yellow
         $response = Read-Host "Do you want to reinstall/update? (y/n)"
         if ($response -notmatch '^[Yy]$') {
             Write-Host "Installation cancelled." -ForegroundColor Yellow
@@ -102,7 +52,7 @@ if ($azInstalled) {
         }
     }
     catch {
-        Write-Host "Azure CLI is already installed" -ForegroundColor Yellow
+        Write-Host "AWS CLI is already installed" -ForegroundColor Yellow
         $response = Read-Host "Do you want to reinstall/update? (y/n)"
         if ($response -notmatch '^[Yy]$') {
             Write-Host "Installation cancelled." -ForegroundColor Yellow
@@ -111,24 +61,17 @@ if ($azInstalled) {
     }
 }
 
-function Install-AzureCLI-MSI {
+function Install-AWSCLI-MSI {
     param([string]$installerPath)
     
     Write-Host "Attempting MSI installation..." -ForegroundColor Cyan
     
-    $logPath = "$env:TEMP\AzureCLI_Install.log"
+    $logPath = "$env:TEMP\AWSCLI_Install.log"
     
     try {
-        Write-Host "Installing for all users..." -ForegroundColor Gray
-        $arguments = @("/i", "`"$installerPath`"", "/quiet", "/norestart", "ALLUSERS=1", "/L*v", "`"$logPath`"")
+        Write-Host "Installing AWS CLI..." -ForegroundColor Gray
+        $arguments = @("/i", "`"$installerPath`"", "/quiet", "/norestart", "/L*v", "`"$logPath`"")
         $process = Start-Process msiexec.exe -ArgumentList $arguments -Wait -PassThru -NoNewWindow
-        
-        if ($process.ExitCode -eq 1925 -or $process.ExitCode -eq 1603) {
-            Write-Host "Retrying with per-user installation..." -ForegroundColor Yellow
-            $logPath = "$env:TEMP\AzureCLI_Install_PerUser.log"
-            $arguments = @("/i", "`"$installerPath`"", "/quiet", "/norestart", "ALLUSERS=2", "MSIINSTALLPERUSER=1", "/L*v", "`"$logPath`"")
-            $process = Start-Process msiexec.exe -ArgumentList $arguments -Wait -PassThru -NoNewWindow
-        }
         
         if ($process.ExitCode -eq 0 -or $process.ExitCode -eq 3010) {
             Write-Host "MSI installation successful!" -ForegroundColor Green
@@ -145,7 +88,7 @@ function Install-AzureCLI-MSI {
     }
 }
 
-function Install-AzureCLI-Winget {
+function Install-AWSCLI-Winget {
     Write-Host "Attempting Winget installation..." -ForegroundColor Cyan
     
     $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
@@ -157,7 +100,7 @@ function Install-AzureCLI-Winget {
     try {
         # Winget automatically selects the correct architecture
         Write-Host "Installing via Windows Package Manager..." -ForegroundColor Gray
-        $arguments = @("install", "Microsoft.AzureCLI", "--accept-package-agreements", "--accept-source-agreements", "--silent")
+        $arguments = @("install", "Amazon.AWSCLI", "--accept-package-agreements", "--accept-source-agreements", "--silent")
         $process = Start-Process winget -ArgumentList $arguments -Wait -PassThru -NoNewWindow
         
         if ($process.ExitCode -eq 0) {
@@ -181,24 +124,24 @@ Write-Host "Detected system architecture: $architecture" -ForegroundColor Gray
 
 # Set appropriate installer URL based on architecture (always latest version)
 if ($architecture -eq "x64") {
-    $installerUrl = "https://azcliprod.azureedge.net/msi/azure-cli-latest-x64.msi"
-    Write-Host "Targeting Azure CLI (latest) for 64-bit system" -ForegroundColor Gray
+    # AWS CLI v2 latest for 64-bit systems
+    $installerUrl = "https://awscli.amazonaws.com/AWSCLIV2.msi"
+    Write-Host "Targeting AWS CLI v2 (latest) for 64-bit system" -ForegroundColor Gray
 } else {
-    $installerUrl = "https://azcliprod.azureedge.net/msi/azure-cli-latest-x86.msi"
-    Write-Host "Targeting Azure CLI (latest) for 32-bit system" -ForegroundColor Gray
+    # AWS CLI v2 only supports 64-bit, fallback to latest v1 for 32-bit
+    Write-Host "Note: AWS CLI v2 requires 64-bit system. Installing latest v1 for 32-bit compatibility." -ForegroundColor Yellow
+    $installerUrl = "https://s3.amazonaws.com/aws-cli/AWSCLI32PY3.msi"
 }
 
-$installerPath = "$env:TEMP\AzureCLI-$architecture.msi"
+$installerPath = "$env:TEMP\AWSCLI-$architecture.msi"
 $installationSuccessful = $false
-
-
 
 # Try installation methods in order of preference
 Write-Host ""
-Write-Host "Installing Azure CLI..." -ForegroundColor Cyan
+Write-Host "Installing AWS CLI..." -ForegroundColor Cyan
 
 # Method 1: Winget (preferred - modern package manager)
-$installationSuccessful = Install-AzureCLI-Winget
+$installationSuccessful = Install-AWSCLI-Winget
 
 # Method 2: MSI (fallback if Winget failed)
 if (-not $installationSuccessful) {
@@ -206,12 +149,12 @@ if (-not $installationSuccessful) {
     Write-Host "Winget failed, trying MSI installer..." -ForegroundColor Yellow
     
     # Download appropriate MSI
-    Write-Host "Downloading Azure CLI installer ($architecture)..." -ForegroundColor Cyan
+    Write-Host "Downloading AWS CLI installer ($architecture)..." -ForegroundColor Cyan
     try {
         Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
         Write-Host "Download complete" -ForegroundColor Green
         
-        $installationSuccessful = Install-AzureCLI-MSI -installerPath $installerPath
+        $installationSuccessful = Install-AWSCLI-MSI -installerPath $installerPath
     }
     catch {
         Write-Host "Failed to download installer: $_" -ForegroundColor Red
@@ -227,47 +170,50 @@ if (Test-Path $installerPath) {
 Write-Host ""
 Write-Host "Verifying installation..." -ForegroundColor Cyan
 
-# Configure Azure CLI PATH permanently
-Set-AzureCLIPath
-
 # Refresh environment variables
 Write-Host "Refreshing environment variables..." -ForegroundColor Gray
 $env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path', 'User')
 
+# Also try to refresh the current session
+try {
+    $env:Path = $env:Path + ';C:\Program Files\Amazon\AWSCLIV2'
+    $env:Path = $env:Path + ';C:\Program Files (x86)\Amazon\AWSCLI'
+} catch { }
+
 Start-Sleep -Seconds 3
 
-$azCommand = Get-Command az -ErrorAction SilentlyContinue
+$awsCommand = Get-Command aws -ErrorAction SilentlyContinue
 
 # If not found in PATH, check common installation locations
-if (-not $azCommand) {
+if (-not $awsCommand) {
     $commonPaths = @(
-        "C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd",
-        "C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin\az.cmd",
-        "$env:LOCALAPPDATA\Programs\Azure CLI\wbin\az.cmd"
+        "C:\Program Files\Amazon\AWSCLIV2\aws.exe",
+        "C:\Program Files (x86)\Amazon\AWSCLI\aws.exe",
+        "$env:LOCALAPPDATA\Programs\Amazon\AWSCLI\aws.exe"
     )
     
     foreach ($path in $commonPaths) {
         if (Test-Path $path) {
-            Write-Host "Found Azure CLI at: $path" -ForegroundColor Gray
+            Write-Host "Found AWS CLI at: $path" -ForegroundColor Gray
             # Add to current session PATH
             $pathDir = Split-Path $path -Parent
             if ($env:Path -notlike "*$pathDir*") {
                 $env:Path += ";$pathDir"
             }
-            $azCommand = Get-Command az -ErrorAction SilentlyContinue
+            $awsCommand = Get-Command aws -ErrorAction SilentlyContinue
             break
         }
     }
 }
 
-if ($azCommand) {
-    Write-Host "Azure CLI installed successfully!" -ForegroundColor Green
-    Write-Host "Location: $($azCommand.Source)" -ForegroundColor Gray
+if ($awsCommand) {
+    Write-Host "AWS CLI installed successfully!" -ForegroundColor Green
+    Write-Host "Location: $($awsCommand.Source)" -ForegroundColor Gray
     
     try {
-        $azVersion = & az version --query 'azure-cli' -o tsv 2>$null
-        if ($azVersion) {
-            Write-Host "Version: $azVersion" -ForegroundColor Green
+        $awsVersion = & aws --version 2>&1
+        if ($awsVersion) {
+            Write-Host "Version: $awsVersion" -ForegroundColor Green
         }
     }
     catch {
@@ -276,14 +222,15 @@ if ($azCommand) {
 }
 elseif ($installationSuccessful) {
     Write-Host "Installation completed!" -ForegroundColor Green
-    Write-Host "Please restart your terminal to use the az command" -ForegroundColor Yellow
+    Write-Host "Please restart your terminal to use the aws command" -ForegroundColor Yellow
 }
 else {
     Write-Host "Installation failed!" -ForegroundColor Red
     Write-Host ""
     Write-Host "MANUAL OPTIONS:" -ForegroundColor Yellow
-    Write-Host "1. Download from: https://aka.ms/installazurecliwindows" -ForegroundColor White
-    Write-Host "2. Use winget: winget install Microsoft.AzureCLI" -ForegroundColor White
+    Write-Host "1. Download from: https://aws.amazon.com/cli/" -ForegroundColor White
+    Write-Host "2. Use winget: winget install Amazon.AWSCLI" -ForegroundColor White
+    Write-Host "3. Use Chocolatey: choco install awscli" -ForegroundColor White
     Write-Host ""
     Write-Host "Press any key to close..."
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
@@ -292,14 +239,14 @@ else {
 
 Write-Host ""
 Write-Host "NEXT STEPS:" -ForegroundColor Cyan
-Write-Host "1. Log in to Azure:" -ForegroundColor White
-Write-Host "   az login" -ForegroundColor Gray
+Write-Host "1. Configure AWS credentials:" -ForegroundColor White
+Write-Host "   aws configure" -ForegroundColor Gray
 Write-Host ""
-Write-Host "2. Set default subscription:" -ForegroundColor White
-Write-Host "   az account set --subscription <subscription-id>" -ForegroundColor Gray
+Write-Host "2. Test connection:" -ForegroundColor White
+Write-Host "   aws sts get-caller-identity" -ForegroundColor Gray
 Write-Host ""
 Write-Host "3. Check for updates:" -ForegroundColor White
-Write-Host "   az version" -ForegroundColor Gray
+Write-Host "   aws --version" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Installation complete! (Always installs latest available version)" -ForegroundColor Green
 
