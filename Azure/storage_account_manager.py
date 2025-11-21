@@ -65,7 +65,7 @@ def create_storage_account():
     rg_choice = input("Choose a Resource Group option: ")
     if rg_choice == "0":
         RG = input("Enter new Resource Group name: ")
-        RG_LOCATION = input("Location for new RG (ENTER for eastus): ") or "eastus"
+        RG_LOCATION = input("Location for new Resource Group (ENTER for eastus): ") or "eastus"
         print(f"{Colors.YELLOW}Creating Resource Group...{Colors.NC}")
         run_az(["group", "create", "--name", RG, "--location", RG_LOCATION])
     else:
@@ -84,12 +84,31 @@ def create_storage_account():
     LOCATION = select_from_list(LOCATIONS, "eastus")
     SKU = select_from_list(SKUS, "Standard_LRS")
     KIND = select_from_list(KINDS, "StorageV2")
-    print(f"{Colors.YELLOW}Creating Storage Account...{Colors.NC}")
-    _, _, code = run_az(["storage", "account", "create", "--name", SA_NAME, "--resource-group", RG, "--location", LOCATION, "--sku", SKU, "--kind", KIND])
-    if code == 0:
-        print(f"{Colors.GREEN}Storage Account created successfully!{Colors.NC}")
-    else:
-        print(f"{Colors.RED}Failed to create Storage Account.{Colors.NC}")
+    print(f"{Colors.YELLOW}Creating Storage Account with Azure AD authentication enabled...{Colors.NC}")
+    _, err, code = run_az([
+        "storage", "account", "create",
+        "--name", SA_NAME,
+        "--resource-group", RG,
+        "--location", LOCATION,
+        "--sku", SKU,
+        "--kind", KIND,
+        "--allow-shared-key-access", "false",
+        "--min-tls-version", "TLS1_2"
+    ])
+    if code != 0:
+        print(f"{Colors.RED}Failed to create Storage Account: {err}{Colors.NC}")
+        return
+    print(f"{Colors.GREEN}Storage Account created successfully!{Colors.NC}")
+    print(f"{Colors.YELLOW}Assigning 'Storage Blob Data Owner' role to the signed-in user...{Colors.NC}")
+    user_id, _, _ = run_az(["ad", "signed-in-user", "show", "--query", "id", "-o", "tsv"])
+    sub_id, _, _ = run_az(["account", "show", "--query", "id", "-o", "tsv"])
+    _, _, _ = run_az([
+        "role", "assignment", "create",
+        "--assignee", user_id,
+        "--role", "Storage Blob Data Owner",
+        "--scope", f"/subscriptions/{sub_id}/resourceGroups/{RG}/providers/Microsoft.Storage/storageAccounts/{SA_NAME}"
+    ])
+    print(f"{Colors.GREEN}Role assignment completed! You now have permission to upload using --auth-mode login.{Colors.NC}")
 
 def delete_storage_account(name=None):
     if not name:

@@ -68,7 +68,7 @@ function Create-StorageAccount {
     $rg_choice = Read-Host "Choose a Resource Group option"
     if ($rg_choice -eq "0") {
         $RG = Read-Host "Enter new Resource Group name"
-        $RG_LOCATION = Read-Host "Location for new RG (ENTER for eastus)"
+        $RG_LOCATION = Read-Host "Location for new Resource Group (ENTER for eastus)"
         if (-not $RG_LOCATION) { $RG_LOCATION = "eastus" }
         Write-Host "Creating Resource Group..." -ForegroundColor Yellow
         az group create --name $RG --location $RG_LOCATION | Out-Null
@@ -91,13 +91,18 @@ function Create-StorageAccount {
     $LOCATION = Select-FromList -Options $LOCATIONS -Default "eastus"
     $SKU = Select-FromList -Options $SKUS -Default "Standard_LRS"
     $KIND = Select-FromList -Options $KINDS -Default "StorageV2"
-    Write-Host "Creating Storage Account..." -ForegroundColor Yellow
-    az storage account create --name $SA_NAME --resource-group $RG --location $LOCATION --sku $SKU --kind $KIND | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "Storage Account created successfully!" -ForegroundColor Green
-    } else {
+    Write-Host "Creating Storage Account with Azure AD authentication enabled..." -ForegroundColor Yellow
+    az storage account create --name $SA_NAME --resource-group $RG --location $LOCATION --sku $SKU --kind $KIND --allow-shared-key-access false --min-tls-version TLS1_2 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
         Write-Host "Failed to create Storage Account." -ForegroundColor Red
+        return
     }
+    Write-Host "Storage Account created successfully!" -ForegroundColor Green
+    Write-Host "Assigning 'Storage Blob Data Owner' role to the signed-in user..." -ForegroundColor Yellow
+    $USER_ID = az ad signed-in-user show --query id -o tsv
+    $SUB_ID = az account show --query id -o tsv
+    az role assignment create --assignee $USER_ID --role "Storage Blob Data Owner" --scope "/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.Storage/storageAccounts/$SA_NAME" | Out-Null
+    Write-Host "Role assignment completed! You now have permission to upload using --auth-mode login." -ForegroundColor Green
 }
 
 function Delete-StorageAccount {
