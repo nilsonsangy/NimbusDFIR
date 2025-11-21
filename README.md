@@ -25,23 +25,33 @@ Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud 
 
 | Cloud | Script | Description |
 |-------|--------|-------------|
-| AWS | aws_ebs_snapshot_collector | Collects EBS disk snapshots and generates SHA256 hashes |
-| | aws_ebs_snapshot_hash | Generates SHA256 hashes for EBS snapshots |
-| | ec2_manager | Manage EC2 instances (list, create, start, stop, terminate) |
-| | ec2_evidence_preservation | Digital forensics and incident response for EC2 (isolate, snapshot evidence) |
-| | hello_aws | Tests AWS connection and prints account ID and regions |
-| | install_aws_cli_macos | Installs AWS CLI v2 on macOS |
-| | install_aws_cli_windows | Installs AWS CLI on Windows with automatic configuration |
-| | rds_connect | Connect to RDS instances (public or private via jump server) |
-| | rds_dump_database | Dump RDS databases with interactive or direct mode |
-| | rds_insert_mock_data | Insert mock e-commerce data into RDS databases |
-| | s3_manager | Manage S3 buckets (list, create, delete, upload, download, dump) |
-| Azure | hello_az | Tests Azure connection and prints account info and subscriptions |
-| | install_azure_cli_macos | Installs Azure CLI on macOS |
-| | install_azure_cli_windows | Installs Azure CLI on Windows with automatic configuration |
-| | install_mysql_windows | Installs MySQL Community Server on Windows with PATH configuration |
-| | mysql_connect | Connect to Azure MySQL Flexible Server (public or private via jump server) |
-| GCP | hello_gcp | Tests GCP connection and prints account email and regions |
+| AWS | aws_ebs_snapshot_collector.py | Collects EBS disk snapshots and generates SHA256 hashes |
+| | aws_ebs_snapshot_hash.py | Generates SHA256 hashes for EBS snapshots |
+| | cloudtrail_investigation.ps1 | Investigate security incidents using CloudTrail logs |
+| | ec2_evidence_preservation.sh / .ps1 / .py | Digital forensics and incident response for EC2 (isolate, snapshot evidence) |
+| | ec2_manager.sh / .ps1 / .py | Manage EC2 instances (list, create, start, stop, terminate) |
+| | forensic_disk_collection.ps1 | Automated forensic disk collection from EC2 |
+| | hello_aws.py | Tests AWS connection and prints account ID and regions |
+| | install_aws_cli_macos.sh | Installs AWS CLI v2 on macOS |
+| | install_aws_cli_windows.ps1 | Installs AWS CLI on Windows with automatic configuration |
+| | rds_connect.sh | Connect to RDS instances (public or private via jump server) |
+| | rds_dump_database.sh | Dump RDS databases with interactive or direct mode |
+| | rds_insert_mock_data.sh | Insert mock e-commerce data into RDS databases |
+| | rds_manager.sh | Manage RDS instances lifecycle |
+| | s3_bucket_evidence.py | Specialized tool for collecting S3 bucket evidence |
+| | s3_manager.sh / .ps1 / .py | Manage S3 buckets (list, create, delete, upload, download, dump) |
+| Azure | blob_storage_manager.sh / .ps1 / .py | Manage Azure Blob Storage containers and blobs |
+| | hello_az.sh / .ps1 / .py | Tests Azure connection and prints account info and subscriptions |
+| | install_azure_cli_linux.sh | Installs Azure CLI on Linux |
+| | install_azure_cli_macos.sh | Installs Azure CLI on macOS |
+| | install_azure_cli_windows.ps1 | Installs Azure CLI on Windows with automatic configuration |
+| | install_mysql_windows.ps1 | Installs MySQL Community Server on Windows with PATH configuration |
+| | mysql_connect.sh / .ps1 / .py | Connect to Azure MySQL Flexible Server (public or private via jump server) |
+| | mysql_dump_database.sh / .ps1 / .py | Dump Azure MySQL databases |
+| | mysql_insert_mock_data.sh / .ps1 / .py | Insert mock data into Azure MySQL |
+| | storage_account_manager.sh / .ps1 / .py | Manage Azure Storage Accounts (AAD, TLS, role assignment) |
+| | vm_manager.sh / .ps1 / .py | Manage Azure VMs (list, create, start, stop, delete) |
+| GCP | hello_gcp.py | Tests GCP connection and prints account email and regions |
 
 **Note:** Scripts are available in multiple formats:
 - `.sh` - Bash (macOS/Linux)
