@@ -1,9 +1,17 @@
+
+param(
+    [Parameter(Position=0)] [string]$Command,
+    [Parameter(Position=1)] [string]$Arg
+)
+
 <#
 .SYNOPSIS
     Azure Storage Account Manager (PowerShell)
 .DESCRIPTION
     Cross-platform script for managing Azure Storage Accounts interactively.
 #>
+
+# Main CLI param block must be at the top
 
 function Show-Banner {
     Write-Host "==============================================" -ForegroundColor Blue
@@ -157,10 +165,6 @@ function Show-Help {
 }
 
 # Main CLI
-param(
-    [Parameter(Position=0)] [string]$Command,
-    [Parameter(Position=1)] [string]$Arg
-)
 
 switch ($Command) {
     "list"   { Show-Banner; List-StorageAccounts }
