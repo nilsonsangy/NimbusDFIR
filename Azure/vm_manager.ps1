@@ -101,9 +101,19 @@ function New-VM {
     }
     
     Write-Host ""
-    $rgName = Read-Host "Enter resource group name (default: rg-forensics)"
-    if ([string]::IsNullOrWhiteSpace($rgName)) {
+    $rgInput = Read-Host "Enter resource group name or number (default: rg-forensics)"
+    if ([string]::IsNullOrWhiteSpace($rgInput)) {
         $rgName = "rg-forensics"
+    } elseif ($rgInput -match '^[0-9]+$') {
+        $rgIndex = [int]$rgInput - 1
+        if ($resourceGroups -and $rgIndex -ge 0 -and $rgIndex -lt $resourceGroups.Count) {
+            $rgName = $resourceGroups[$rgIndex].Name
+        } else {
+            Write-Host "Invalid resource group number. Using default: rg-forensics" -ForegroundColor Yellow
+            $rgName = "rg-forensics"
+        }
+    } else {
+        $rgName = $rgInput
     }
     
     # Check if resource group exists
@@ -288,9 +298,8 @@ function Remove-VM {
     
     Write-Host "VM found in resource group: $rgName" -ForegroundColor Yellow
     Write-Host ""
-    $confirm = Read-Host "Are you sure you want to delete VM '$VMName'? (yes/no)"
-    
-    if ($confirm -ne "yes") {
+    $confirm = Read-Host "Are you sure you want to delete VM '$VMName'? (y/N)"
+    if ($confirm -ne "y" -and $confirm -ne "Y") {
         Write-Host "Deletion cancelled"
         exit 0
     }

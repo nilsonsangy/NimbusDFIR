@@ -164,9 +164,18 @@ def create_vm():
         print("  No resource groups found")
     
     print()
-    rg_name = input("Enter resource group name (default: rg-forensics): ").strip()
-    if not rg_name:
+    rg_input = input("Enter resource group name or number (default: rg-forensics): ").strip()
+    if not rg_input:
         rg_name = "rg-forensics"
+    elif rg_input.isdigit() and resource_groups:
+        rg_index = int(rg_input) - 1
+        if 0 <= rg_index < len(resource_groups):
+            rg_name = resource_groups[rg_index]['Name']
+        else:
+            print_colored("Invalid resource group number. Using default: rg-forensics", Colors.YELLOW)
+            rg_name = "rg-forensics"
+    else:
+        rg_name = rg_input
     
     # Check if resource group exists
     stdout, stderr, returncode = run_az_command(f"az group show --name {rg_name}")
@@ -370,9 +379,8 @@ def delete_vm(vm_name):
     
     print_colored(f"VM found in resource group: {rg_name}", Colors.YELLOW)
     print()
-    confirm = input(f"Are you sure you want to delete VM '{vm_name}'? (yes/no): ").strip().lower()
-    
-    if confirm != "yes":
+    confirm = input(f"Are you sure you want to delete VM '{vm_name}'? (y/N): ").strip().lower()
+    if confirm != "y":
         print("Deletion cancelled")
         sys.exit(0)
     

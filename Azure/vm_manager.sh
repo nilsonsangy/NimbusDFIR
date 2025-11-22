@@ -104,8 +104,21 @@ create_vm() {
     fi
     
     echo ""
-    read -p "Enter resource group name (default: rg-forensics): " RG_NAME
-    RG_NAME=${RG_NAME:-rg-forensics}
+    read -p "Enter resource group name or number (default: rg-forensics): " RG_INPUT
+    if [ -z "$RG_INPUT" ]; then
+        RG_NAME="rg-forensics"
+    elif [[ "$RG_INPUT" =~ ^[0-9]+$ ]]; then
+        RG_INDEX=$((RG_INPUT-1))
+        RG_COUNT=$(echo "$RG_LIST" | jq length)
+        if [ $RG_INDEX -ge 0 ] && [ $RG_INDEX -lt $RG_COUNT ]; then
+            RG_NAME=$(echo "$RG_LIST" | jq -r ".[$RG_INDEX].Name")
+        else
+            echo -e "${YELLOW}Invalid resource group number. Using default: rg-forensics${NC}"
+            RG_NAME="rg-forensics"
+        fi
+    else
+        RG_NAME="$RG_INPUT"
+    fi
     
     # Check if resource group exists
     if ! az group show --name "$RG_NAME" &> /dev/null; then
@@ -298,9 +311,8 @@ delete_vm() {
     
     echo -e "${YELLOW}VM found in resource group: $RG_NAME${NC}"
     echo ""
-    read -p "Are you sure you want to delete VM '$VM_NAME'? (yes/no): " CONFIRM
-    
-    if [ "$CONFIRM" != "yes" ]; then
+    read -p "Are you sure you want to delete VM '$VM_NAME'? (y/N): " CONFIRM
+    if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
         echo "Deletion cancelled"
         exit 0
     fi
