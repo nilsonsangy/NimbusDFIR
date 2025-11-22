@@ -4,6 +4,7 @@ This directory contains forensic and incident response tools for AWS environment
 
 ---
 
+
 ## 📋 Table of Contents
 - [Installation AWS CLI](#installation-aws-cli)
 - [Connection Testing](#connection-testing)
@@ -13,6 +14,26 @@ This directory contains forensic and incident response tools for AWS environment
 - [S3 Management](#s3-management)
 - [CloudTrail Investigation](#cloudtrail-investigation)
 - [EBS Snapshot Tools](#ebs-snapshot-tools)
+- [Forensic Disk Collection](#forensic-disk-collection)
+## Script Inventory
+
+| Script | Description |
+|--------|-------------|
+| aws_ebs_snapshot_collector.py | Collects EBS disk snapshots and generates SHA256 hashes |
+| aws_ebs_snapshot_hash.py | Generates SHA256 hashes for EBS snapshots |
+| cloudtrail_investigation.ps1 | Investigate security incidents using CloudTrail logs |
+| ec2_evidence_preservation.sh / .ps1 / .py | Digital forensics and incident response for EC2 (isolate, snapshot evidence) |
+| ec2_manager.sh / .ps1 / .py | Manage EC2 instances (list, create, start, stop, terminate) |
+| forensic_disk_collection.ps1 | Automated forensic disk collection from EC2 |
+| hello_aws.py | Tests AWS connection and prints account ID and regions |
+| install_aws_cli_macos.sh | Installs AWS CLI v2 on macOS |
+| install_aws_cli_windows.ps1 | Installs AWS CLI on Windows with automatic configuration |
+| rds_connect.sh | Connect to RDS instances (public or private via jump server) |
+| rds_dump_database.sh | Dump RDS databases with interactive or direct mode |
+| rds_insert_mock_data.sh | Insert mock e-commerce data into RDS databases |
+| rds_manager.sh | Manage RDS instances lifecycle |
+| s3_bucket_evidence.py | Specialized tool for collecting S3 bucket evidence |
+| s3_manager.sh / .ps1 / .py | Manage S3 buckets (list, create, delete, upload, download, dump) |
 
 ---
 
@@ -50,11 +71,11 @@ python3 hello_aws.py
 
 ## EC2 Management
 
-### ec2_manager.sh
+### ec2_manager.sh / .ps1 / .py
 Manage EC2 instances (list, create, start, stop, terminate).
 
 ```bash
-# List all EC2 instances (.sh / .ps1 / .py available)
+# List all EC2 instances
 ./ec2_manager.sh list
 
 # Create a new instance
@@ -70,37 +91,27 @@ Manage EC2 instances (list, create, start, stop, terminate).
 ./ec2_manager.sh delete i-1234567890abcdef0
 ```
 
-### ec2_evidence.ps1
-Collect forensic evidence from EC2 instances.
-
-```powershell
-# Collect evidence from an instance
-.\ec2_evidence.ps1 -InstanceId i-1234567890abcdef0 -OutputPath ./evidence
-
-# Include memory dump
-.\ec2_evidence.ps1 -InstanceId i-1234567890abcdef0 -OutputPath ./evidence -IncludeMemory
-```
 
 ### forensic_disk_collection.ps1
 Automated forensic disk collection from EC2.
 
 ```powershell
 # Collect disk evidence
-.\forensic_disk_collection.ps1 -InstanceId i-1234567890abcdef0
+./forensic_disk_collection.ps1 -InstanceId i-1234567890abcdef0
 
 # Specify target region
-.\forensic_disk_collection.ps1 -InstanceId i-1234567890abcdef0 -Region us-west-2
+./forensic_disk_collection.ps1 -InstanceId i-1234567890abcdef0 -Region us-west-2
 ```
 
 ---
 
 ## EC2 Evidence Preservation
 
-### ec2_evidence_preservation.sh
+### ec2_evidence_preservation.sh / .ps1 / .py
 Digital forensics and incident response tools for EC2 instances. Provides isolation and evidence preservation capabilities.
 
 ```bash
-# Isolate compromised instance (interactive selection) (.sh / .ps1 / .py available)
+# Isolate compromised instance (interactive selection)
 ./ec2_evidence_preservation.sh isolate
 
 # Isolate specific instance
@@ -224,11 +235,12 @@ Manage RDS instances lifecycle.
 
 ## S3 Management
 
-### s3_manager.sh
+
+### s3_manager.sh / .ps1 / .py
 Manage S3 buckets (list, create, delete, upload, download, dump).
 
 ```bash
-# List all S3 buckets (.sh / .ps1 / .py available)
+# List all S3 buckets
 ./s3_manager.sh list
 
 # Create a new bucket
@@ -247,6 +259,7 @@ Manage S3 buckets (list, create, delete, upload, download, dump).
 ./s3_manager.sh delete my-bucket
 ```
 
+
 ### s3_bucket_evidence.py
 Specialized tool for collecting S3 bucket evidence.
 
@@ -262,18 +275,19 @@ python3 s3_bucket_evidence.py --bucket-name my-bucket --include-metadata
 
 ## CloudTrail Investigation
 
+
 ### cloudtrail_investigation.ps1
 Investigate security incidents using CloudTrail logs.
 
 ```powershell
 # Search for specific user activity
-.\cloudtrail_investigation.ps1 -UserName suspicious-user -StartTime "2025-01-01" -EndTime "2025-01-31"
+./cloudtrail_investigation.ps1 -UserName suspicious-user -StartTime "2025-01-01" -EndTime "2025-01-31"
 
 # Search for specific event
-.\cloudtrail_investigation.ps1 -EventName "DeleteBucket" -Region us-east-1
+./cloudtrail_investigation.ps1 -EventName "DeleteBucket" -Region us-east-1
 
 # Export results to CSV
-.\cloudtrail_investigation.ps1 -UserName user123 -OutputFile investigation.csv
+./cloudtrail_investigation.ps1 -UserName user123 -OutputFile investigation.csv
 ```
 
 ---
