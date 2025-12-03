@@ -1,15 +1,19 @@
 # S3 Manager Script - PowerShell
 # Author: NimbusDFIR
-# Description: Manage S3 buckets - list, create, delete, upload, download, and dump buckets
+# Description: S3 bucket manager
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet('list', 'create', 'delete', 'upload', 'download', 'dump', 'info', 'help')]
+    [ValidateSet('list', 'create', 'delete', 'upload', 'download', 'dump', 'help')]
     [string]$Command,
-    
+
     [Parameter(Position=1, ValueFromRemainingArguments=$true)]
     [string[]]$Arguments
 )
+
+# -----------------------
+# Environment Checks
+# -----------------------
 
 # Check if AWS CLI is installed
 function Test-AwsCli {
@@ -19,7 +23,6 @@ function Test-AwsCli {
     }
     catch {
         Write-Host "Error: AWS CLI is not installed" -ForegroundColor Red
-        Write-Host "Please install AWS CLI first"
         return $false
     }
 }
@@ -30,14 +33,13 @@ function Test-AwsCredentials {
         $null = aws sts get-caller-identity 2>&1
         if ($LASTEXITCODE -ne 0) {
             Write-Host "Error: AWS credentials not configured" -ForegroundColor Red
-            Write-Host "Please run: aws configure"
+            Write-Host "Run: aws configure"
             return $false
         }
         return $true
     }
     catch {
         Write-Host "Error: AWS credentials not configured" -ForegroundColor Red
-        Write-Host "Please run: aws configure"
         return $false
     }
 }
@@ -51,419 +53,356 @@ function Show-Usage {
     Write-Host "Usage: .\s3_manager.ps1 [COMMAND] [OPTIONS]"
     Write-Host ""
     Write-Host "Commands:"
-    Write-Host "  list              List all S3 buckets"
-    Write-Host "  create            Create a new S3 bucket"
-    Write-Host "  delete            Delete an S3 bucket"
-    Write-Host "  upload            Upload file(s) to a bucket"
-    Write-Host "  download          Download a file from a bucket"
-    Write-Host "  dump              Download all files from a bucket as a zip"
-    Write-Host "  info              Get bucket information"
-    Write-Host "  help              Show this help message"
+    Write-Host "  list                List all S3 buckets"
+    Write-Host "  create              Create a new S3 bucket"
+    Write-Host "  delete [bucket]     Delete an S3 bucket"
+    Write-Host "  upload <path> [bucket]  Upload file/folder to bucket"
+    Write-Host "  download <bucket> <file>  Download a file from bucket"
+    Write-Host "  dump <bucket>       Download all files from bucket as zip"
+    Write-Host "  help                Show this help message"
     Write-Host ""
     Write-Host "Examples:"
     Write-Host "  .\s3_manager.ps1 list"
     Write-Host "  .\s3_manager.ps1 create"
-    Write-Host "  .\s3_manager.ps1 upload C:\Pictures\* my-bucket"
-    Write-Host "  .\s3_manager.ps1 download my-bucket file.jpg"
+    Write-Host "  .\s3_manager.ps1 delete my-bucket"
+    Write-Host "  .\s3_manager.ps1 upload C:\files\photo.jpg my-bucket"
+    Write-Host "  .\s3_manager.ps1 upload C:\my-folder"
+    Write-Host "  .\s3_manager.ps1 download my-bucket photo.jpg"
     Write-Host "  .\s3_manager.ps1 dump my-bucket"
     Write-Host ""
 }
 
+# -----------------------
+# S3 Functions
+# -----------------------
+
 # List all S3 buckets
 function Get-S3Buckets {
-    Write-Host "Listing S3 Buckets..." -ForegroundColor Blue
+    Write-Host "Listing S3 buckets..." -ForegroundColor Yellow
     Write-Host ""
     
-    $buckets = aws s3api list-buckets --query 'Buckets[*].[Name,CreationDate]' --output json | ConvertFrom-Json
+    # Get buckets list
+    $jsonOutput = aws s3api list-buckets --output json
+    $buckets = $jsonOutput | ConvertFrom-Json
     
-    if (-not $buckets -or $buckets.Count -eq 0) {
-        Write-Host "No S3 buckets found" -ForegroundColor Yellow
+    if (-not $buckets.Buckets -or $buckets.Buckets.Count -eq 0) {
+        Write-Host "No buckets found" -ForegroundColor Red
         return
     }
     
-    Write-Host "Bucket Name`t`t`t`tCreation Date" -ForegroundColor Green
-    Write-Host "--------------------------------------------------------------------------------"
+    Write-Host "Available buckets:" -ForegroundColor Blue
+    Write-Host ""
+    Write-Host ("{0,-40} {1}" -f "Bucket Name", "Created") -ForegroundColor Cyan
+    Write-Host ("{0,-40} {1}" -f "-----------", "-------") -ForegroundColor Cyan
     
-    foreach ($bucket in $buckets) {
-        $name = $bucket[0]
-        $date = $bucket[1]
-        Write-Host "$name`t`t$date" -ForegroundColor Green
+    foreach ($bucket in $buckets.Buckets) {
+        Write-Host ("{0,-40} {1}" -f $bucket.Name, $bucket.CreationDate) -ForegroundColor Green
     }
     
     Write-Host ""
-    Write-Host "Total buckets: $($buckets.Count)" -ForegroundColor Green
+    Write-Host "Total: $($buckets.Buckets.Count) bucket(s)"
 }
 
 # Create a new S3 bucket
 function New-S3Bucket {
-    Write-Host "Create New S3 Bucket" -ForegroundColor Blue
-    Write-Host ""
+    param([string]$BucketName)
     
-    $bucketName = Read-Host "Enter bucket name (must be globally unique, lowercase, no spaces)"
+    # If no bucket name provided, ask for it
+    if ([string]::IsNullOrWhiteSpace($BucketName)) {
+        $BucketName = Read-Host "New bucket name"
+    }
     
-    if ([string]::IsNullOrWhiteSpace($bucketName)) {
-        Write-Host "Error: Bucket name is required" -ForegroundColor Red
+    if ([string]::IsNullOrWhiteSpace($BucketName)) {
+        Write-Host "Error: Bucket name cannot be empty" -ForegroundColor Red
         return
     }
     
-    # Validate bucket name
-    if ($bucketName -notmatch '^[a-z0-9][a-z0-9.-]*[a-z0-9]$') {
-        Write-Host "Error: Invalid bucket name" -ForegroundColor Red
-        Write-Host "Bucket names must:"
-        Write-Host "  - Be 3-63 characters long"
-        Write-Host "  - Start and end with lowercase letter or number"
-        Write-Host "  - Contain only lowercase letters, numbers, hyphens, and periods"
-        return
-    }
+    Write-Host "Creating bucket '$bucketName'..." -ForegroundColor Yellow
     
-    $currentRegion = aws configure get region
-    $region = Read-Host "Enter region (default: $currentRegion)"
-    if ([string]::IsNullOrWhiteSpace($region)) {
-        $region = $currentRegion
-    }
+    $result = aws s3api create-bucket --bucket $bucketName 2>&1
     
-    Write-Host ""
-    Write-Host "Creating bucket '$bucketName' in region '$region'..." -ForegroundColor Yellow
-    
-    # Create bucket
-    try {
-        if ($region -eq "us-east-1") {
-            aws s3api create-bucket --bucket $bucketName --region $region | Out-Null
-        }
-        else {
-            aws s3api create-bucket --bucket $bucketName --region $region --create-bucket-configuration LocationConstraint=$region | Out-Null
-        }
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "✓ Bucket '$bucketName' created successfully!" -ForegroundColor Green
-            
-            # Enable versioning
-            $enableVersioning = Read-Host "Enable versioning? (y/N)"
-            if ($enableVersioning -match '^[Yy]$') {
-                aws s3api put-bucket-versioning --bucket $bucketName --versioning-configuration Status=Enabled
-                Write-Host "✓ Versioning enabled" -ForegroundColor Green
-            }
-            
-            # Block public access
-            $blockPublic = Read-Host "Block all public access? (recommended) (Y/n)"
-            if ($blockPublic -notmatch '^[Nn]$') {
-                aws s3api put-public-access-block --bucket $bucketName --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
-                Write-Host "✓ Public access blocked" -ForegroundColor Green
-            }
-        }
-        else {
-            Write-Host "✗ Failed to create bucket" -ForegroundColor Red
-        }
-    }
-    catch {
-        Write-Host "✗ Failed to create bucket: $_" -ForegroundColor Red
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "✓ Bucket created successfully" -ForegroundColor Green
+    } else {
+        Write-Host "✗ Failed to create bucket" -ForegroundColor Red
+        Write-Host $result
     }
 }
 
-# Delete a bucket
+# Delete an S3 bucket
 function Delete-S3Bucket {
     param([string]$BucketName)
     
+    # If no bucket name provided, list buckets for selection
     if ([string]::IsNullOrWhiteSpace($BucketName)) {
         Write-Host "Available buckets:" -ForegroundColor Yellow
-        Get-S3Buckets
+        
+        $jsonOutput = aws s3api list-buckets --output json
+        $bucketsData = $jsonOutput | ConvertFrom-Json
+        
+        if (-not $bucketsData.Buckets -or $bucketsData.Buckets.Count -eq 0) {
+            Write-Host "No buckets found" -ForegroundColor Red
+            return
+        }
+        
         Write-Host ""
-        $BucketName = Read-Host "Enter bucket name to delete"
-    }
-    
-    if ([string]::IsNullOrWhiteSpace($BucketName)) {
-        Write-Host "Error: Bucket name is required" -ForegroundColor Red
-        return
-    }
-    
-    # Check if bucket exists
-    try {
-        $null = aws s3api head-bucket --bucket $BucketName 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "Error: Bucket '$BucketName' not found or not accessible" -ForegroundColor Red
+        for ($i = 0; $i -lt $bucketsData.Buckets.Count; $i++) {
+            Write-Host "$($i+1). $($bucketsData.Buckets[$i].Name)"
+        }
+        
+        Write-Host ""
+        $selection = Read-Host "Select bucket number to delete"
+        
+        if ($selection -match '^\d+$') {
+            $index = [int]$selection - 1
+            if ($index -ge 0 -and $index -lt $bucketsData.Buckets.Count) {
+                $BucketName = $bucketsData.Buckets[$index].Name
+            } else {
+                Write-Host "Invalid selection" -ForegroundColor Red
+                return
+            }
+        } else {
+            Write-Host "Invalid input" -ForegroundColor Red
             return
         }
     }
-    catch {
-        Write-Host "Error: Bucket '$BucketName' not found or not accessible" -ForegroundColor Red
+    
+    # Confirm deletion
+    Write-Host ""
+    Write-Host "WARNING: This action cannot be undone!" -ForegroundColor Red
+    $confirm = Read-Host "Are you sure you want to delete bucket '$BucketName'? (y/N)"
+    
+    if ($confirm -notmatch '^[Yy]$') {
+        Write-Host "Operation cancelled" -ForegroundColor Yellow
         return
     }
     
-    Write-Host "WARNING: This will permanently delete bucket '$BucketName'" -ForegroundColor Yellow
-    $confirm = Read-Host "Are you sure? (yes/no)"
+    Write-Host "Deleting bucket '$BucketName'..." -ForegroundColor Yellow
     
-    if ($confirm -ne "yes") {
-        Write-Host "Operation cancelled"
-        return
-    }
-    
-    # Empty bucket first
-    Write-Host "Emptying bucket..." -ForegroundColor Yellow
+    # Try to empty the bucket first
     aws s3 rm "s3://$BucketName" --recursive 2>&1 | Out-Null
     
-    Write-Host "Deleting bucket..."
-    aws s3api delete-bucket --bucket $BucketName
+    # Delete the bucket
+    aws s3api delete-bucket --bucket $BucketName 2>&1
     
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "✓ Bucket '$BucketName' deleted successfully" -ForegroundColor Green
-    }
-    else {
+        Write-Host "✓ Bucket deleted successfully" -ForegroundColor Green
+    } else {
         Write-Host "✗ Failed to delete bucket" -ForegroundColor Red
     }
 }
 
-# Upload files to bucket
-function Add-S3Files {
-    param([string[]]$Files)
-    
-    if ($Files.Count -eq 0) {
-        Write-Host "Error: No files specified" -ForegroundColor Red
-        Write-Host "Usage: .\s3_manager.ps1 upload <files...> [bucket-name]"
+# Download file from S3
+function Get-S3File {
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$BucketName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$FileName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($BucketName) -or [string]::IsNullOrWhiteSpace($FileName)) {
+        Write-Host "Usage: .\s3_manager.ps1 download <bucket> <file>" -ForegroundColor Yellow
         return
     }
-    
-    # Check if last argument is a bucket name
-    $bucketName = $null
-    $fileList = @()
-    
-    foreach ($arg in $Files) {
-        if (Test-Path $arg -PathType Leaf) {
-            $fileList += $arg
-        }
-        else {
-            # Try as bucket name
-            $null = aws s3api head-bucket --bucket $arg 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                $bucketName = $arg
-            }
-        }
-    }
-    
-    if ([string]::IsNullOrWhiteSpace($bucketName)) {
-        Write-Host "Available buckets:" -ForegroundColor Blue
-        $buckets = aws s3api list-buckets --query 'Buckets[*].Name' --output json | ConvertFrom-Json
-        
-        if (-not $buckets) {
-            Write-Host "No buckets found" -ForegroundColor Red
-            return
-        }
-        
-        Write-Host ""
-        for ($i = 0; $i -lt $buckets.Count; $i++) {
-            Write-Host "$($i+1). $($buckets[$i])"
-        }
-        
-        Write-Host ""
-        $selection = Read-Host "Select bucket number (or enter bucket name)"
-        
-        if ($selection -match '^\d+$') {
-            $index = [int]$selection - 1
-            if ($index -ge 0 -and $index -lt $buckets.Count) {
-                $bucketName = $buckets[$index]
-            }
-        }
-        else {
-            $bucketName = $selection
-        }
-    }
-    
-    Write-Host "Uploading files to bucket: $bucketName" -ForegroundColor Blue
-    Write-Host ""
-    
-    $successCount = 0
-    $failCount = 0
-    
-    foreach ($file in $fileList) {
-        $fileName = Split-Path $file -Leaf
-        Write-Host "Uploading $fileName... " -NoNewline
-        
-        aws s3 cp $file "s3://$bucketName/$fileName" --no-progress 2>&1 | Out-Null
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "✓" -ForegroundColor Green
-            $successCount++
-        }
-        else {
-            Write-Host "✗" -ForegroundColor Red
-            $failCount++
-        }
-    }
-    
-    Write-Host ""
-    Write-Host "----------------------------------------"
-    Write-Host "Successfully uploaded: $successCount" -ForegroundColor Green
-    if ($failCount -gt 0) {
-        Write-Host "Failed: $failCount" -ForegroundColor Red
-    }
-}
 
-# Download file from bucket
-function Get-S3File {
-    param([string[]]$Args)
-    
-    $bucketName = $null
-    $fileName = $null
-    $downloadPath = $null
-    
-    if ($Args.Count -ge 1) {
-        $null = aws s3api head-bucket --bucket $Args[0] 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            $bucketName = $Args[0]
-            if ($Args.Count -ge 2) { $fileName = $Args[1] }
-            if ($Args.Count -ge 3) { $downloadPath = $Args[2] }
-        }
+    # Verify bucket exists
+    $null = aws s3api head-bucket --bucket $BucketName 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: Bucket '$BucketName' not found or access denied" -ForegroundColor Red
+        return
     }
+
+    # Default path and ask user
+    $defaultPath = Join-Path $env:USERPROFILE "Downloads\$FileName"
+    Write-Host "Default destination: $defaultPath" -ForegroundColor Blue
+    $custom = Read-Host "Change destination? (y/N)"
     
-    # Select bucket if not provided
-    if ([string]::IsNullOrWhiteSpace($bucketName)) {
-        Write-Host "Available buckets:" -ForegroundColor Blue
-        $buckets = aws s3api list-buckets --query 'Buckets[*].Name' --output json | ConvertFrom-Json
-        
-        if (-not $buckets) {
-            Write-Host "No buckets found" -ForegroundColor Red
-            return
-        }
-        
-        Write-Host ""
-        for ($i = 0; $i -lt $buckets.Count; $i++) {
-            Write-Host "$($i+1). $($buckets[$i])"
-        }
-        
-        Write-Host ""
-        $selection = Read-Host "Select bucket number (or enter bucket name)"
-        
-        if ($selection -match '^\d+$') {
-            $index = [int]$selection - 1
-            if ($index -ge 0 -and $index -lt $buckets.Count) {
-                $bucketName = $buckets[$index]
-            }
-        }
-        else {
-            $bucketName = $selection
-        }
-    }
-    
-    # List files if not provided
-    if ([string]::IsNullOrWhiteSpace($fileName)) {
-        Write-Host "Files in bucket '$bucketName':" -ForegroundColor Blue
-        $files = aws s3 ls "s3://$bucketName" --recursive | ForEach-Object { ($_ -split '\s+', 4)[3] }
-        
-        if (-not $files) {
-            Write-Host "No files found" -ForegroundColor Yellow
-            return
-        }
-        
-        $fileArray = @($files)
-        Write-Host ""
-        for ($i = 0; $i -lt $fileArray.Count; $i++) {
-            Write-Host "$($i+1). $($fileArray[$i])"
-        }
-        
-        Write-Host ""
-        $selection = Read-Host "Select file number (or enter file name)"
-        
-        if ($selection -match '^\d+$') {
-            $index = [int]$selection - 1
-            if ($index -ge 0 -and $index -lt $fileArray.Count) {
-                $fileName = $fileArray[$index]
-            }
-        }
-        else {
-            $fileName = $selection
-        }
-    }
-    
-    # Set download path
-    if ([string]::IsNullOrWhiteSpace($downloadPath)) {
-        $defaultPath = Join-Path $env:USERPROFILE "Downloads\$fileName"
-        $confirm = Read-Host "Download to $defaultPath? (Y/n)"
-        
-        if ($confirm -match '^[Nn]$') {
-            $downloadPath = Read-Host "Enter download path"
-        }
-        else {
+    if ($custom -match '^[Yy]$') {
+        $downloadPath = Read-Host "Enter full path for destination file"
+        if ([string]::IsNullOrWhiteSpace($downloadPath)) {
             $downloadPath = $defaultPath
         }
+    } else {
+        $downloadPath = $defaultPath
     }
-    
-    Write-Host ""
-    Write-Host "Downloading '$fileName' from bucket '$bucketName'..." -ForegroundColor Yellow
-    
-    aws s3 cp "s3://$bucketName/$fileName" $downloadPath
-    
+
+    Write-Host "Downloading '$FileName' from '$BucketName'..." -ForegroundColor Yellow
+    aws s3 cp "s3://$BucketName/$FileName" $downloadPath
+
     if ($LASTEXITCODE -eq 0) {
-        Write-Host ""
-        Write-Host "✓ File downloaded successfully!" -ForegroundColor Green
-        Write-Host "Saved to: $downloadPath"
-    }
-    else {
+        Write-Host "✓ Download completed" -ForegroundColor Green
+        Write-Host "Destination: $downloadPath"
+    } else {
         Write-Host "✗ Failed to download file" -ForegroundColor Red
     }
 }
 
-# Dump entire bucket to zip
-function Export-S3Bucket {
-    param([string]$BucketName)
+# Upload file or folder to S3
+function Add-S3Files {
+    param(
+        [string]$Path,
+        [string]$BucketName
+    )
     
+    # Check if path was provided
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        Write-Host "Usage: .\s3_manager.ps1 upload <path> [bucket]" -ForegroundColor Yellow
+        return
+    }
+    
+    # Check if path exists
+    if (-not (Test-Path $Path)) {
+        Write-Host "Error: Path '$Path' not found" -ForegroundColor Red
+        return
+    }
+    
+    # If no bucket name provided, list buckets for selection
     if ([string]::IsNullOrWhiteSpace($BucketName)) {
-        Write-Host "Available buckets:" -ForegroundColor Blue
-        $buckets = aws s3api list-buckets --query 'Buckets[*].Name' --output json | ConvertFrom-Json
+        Write-Host "Available buckets:" -ForegroundColor Yellow
         
-        if (-not $buckets) {
+        $jsonOutput = aws s3api list-buckets --output json
+        $bucketsData = $jsonOutput | ConvertFrom-Json
+        
+        if (-not $bucketsData.Buckets -or $bucketsData.Buckets.Count -eq 0) {
             Write-Host "No buckets found" -ForegroundColor Red
             return
         }
         
         Write-Host ""
-        for ($i = 0; $i -lt $buckets.Count; $i++) {
-            Write-Host "$($i+1). $($buckets[$i])"
+        for ($i = 0; $i -lt $bucketsData.Buckets.Count; $i++) {
+            Write-Host "$($i+1). $($bucketsData.Buckets[$i].Name)"
         }
         
         Write-Host ""
-        $selection = Read-Host "Select bucket number (or enter bucket name)"
+        $selection = Read-Host "Select bucket number for upload"
         
         if ($selection -match '^\d+$') {
             $index = [int]$selection - 1
-            if ($index -ge 0 -and $index -lt $buckets.Count) {
-                $BucketName = $buckets[$index]
+            if ($index -ge 0 -and $index -lt $bucketsData.Buckets.Count) {
+                $BucketName = $bucketsData.Buckets[$index].Name
+            } else {
+                Write-Host "Invalid selection" -ForegroundColor Red
+                return
             }
-        }
-        else {
-            $BucketName = $selection
+        } else {
+            Write-Host "Invalid input" -ForegroundColor Red
+            return
         }
     }
     
-    # Check bucket
+    # Verify bucket exists
     $null = aws s3api head-bucket --bucket $BucketName 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Error: Bucket '$BucketName' not found" -ForegroundColor Red
+        Write-Host "Error: Bucket '$BucketName' not found or access denied" -ForegroundColor Red
         return
     }
     
+    # Check if path is a file or directory
+    $item = Get-Item $Path
+    
+    if ($item.PSIsContainer) {
+        # It's a directory - use sync
+        Write-Host "Uploading folder '$Path' to bucket '$BucketName'..." -ForegroundColor Yellow
+        aws s3 sync $Path "s3://$BucketName/" --no-progress
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✓ Folder uploaded successfully" -ForegroundColor Green
+        } else {
+            Write-Host "✗ Failed to upload folder" -ForegroundColor Red
+        }
+    } else {
+        # It's a file - use cp
+        $fileName = $item.Name
+        Write-Host "Uploading file '$fileName' to bucket '$BucketName'..." -ForegroundColor Yellow
+        aws s3 cp $Path "s3://$BucketName/$fileName"
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✓ File uploaded successfully" -ForegroundColor Green
+        } else {
+            Write-Host "✗ Failed to upload file" -ForegroundColor Red
+        }
+    }
+}
+
+# Dump bucket to zip
+function Export-S3Bucket {
+    param([string]$BucketName)
+    
+    # If no bucket name provided, list buckets for selection
+    if ([string]::IsNullOrWhiteSpace($BucketName)) {
+        Write-Host "Available buckets:" -ForegroundColor Yellow
+        
+        $jsonOutput = aws s3api list-buckets --output json
+        $bucketsData = $jsonOutput | ConvertFrom-Json
+        
+        if (-not $bucketsData.Buckets -or $bucketsData.Buckets.Count -eq 0) {
+            Write-Host "No buckets found" -ForegroundColor Red
+            return
+        }
+        
+        Write-Host ""
+        for ($i = 0; $i -lt $bucketsData.Buckets.Count; $i++) {
+            Write-Host "$($i+1). $($bucketsData.Buckets[$i].Name)"
+        }
+        
+        Write-Host ""
+        $selection = Read-Host "Select bucket number to dump"
+        
+        if ($selection -match '^\d+$') {
+            $index = [int]$selection - 1
+            if ($index -ge 0 -and $index -lt $bucketsData.Buckets.Count) {
+                $BucketName = $bucketsData.Buckets[$index].Name
+            } else {
+                Write-Host "Invalid selection" -ForegroundColor Red
+                return
+            }
+        } else {
+            Write-Host "Invalid input" -ForegroundColor Red
+            return
+        }
+    }
+    
+    # Verify bucket exists
+    $null = aws s3api head-bucket --bucket $BucketName 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: Bucket '$BucketName' not found or access denied" -ForegroundColor Red
+        return
+    }
+    
+    # Zip file name
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $zipFilename = "${BucketName}_${timestamp}.zip"
     $defaultZipPath = Join-Path $env:USERPROFILE "Downloads\$zipFilename"
     
     Write-Host ""
-    $confirm = Read-Host "Save zip to $defaultZipPath? (Y/n)"
+    Write-Host "Default destination: $defaultZipPath" -ForegroundColor Blue
+    $custom = Read-Host "Change destination? (y/N)"
     
-    if ($confirm -match '^[Nn]$') {
-        $zipPath = Read-Host "Enter zip file path"
-    }
-    else {
+    if ($custom -match '^[Yy]$') {
+        $zipPath = Read-Host "Enter full path for zip file"
+        if ([string]::IsNullOrWhiteSpace($zipPath)) {
+            $zipPath = $defaultZipPath
+        }
+    } else {
         $zipPath = $defaultZipPath
     }
     
+    # Create temporary directory
     $tempDir = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ([System.Guid]::NewGuid()))
     
     Write-Host ""
     Write-Host "Downloading files from bucket..." -ForegroundColor Yellow
     
-    aws s3 sync "s3://$BucketName" $tempDir.FullName --no-progress
+    # Use aws s3 sync with error handling
+    $syncOutput = aws s3 sync "s3://$BucketName" $tempDir.FullName --no-progress 2>&1
     
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "✓ Files downloaded" -ForegroundColor Green
-        
+    # Check if directory has any files (sync may partially succeed)
+    $downloadedFiles = Get-ChildItem -Path $tempDir.FullName -Recurse -File -ErrorAction SilentlyContinue
+    
+    if ($downloadedFiles -and $downloadedFiles.Count -gt 0) {
+        Write-Host "✓ Files downloaded ($($downloadedFiles.Count) file(s))" -ForegroundColor Green
         Write-Host ""
         Write-Host "Creating zip archive..." -ForegroundColor Yellow
         
@@ -477,85 +416,72 @@ function Export-S3Bucket {
         $zipSize = (Get-Item $zipPath).Length
         Write-Host "Size: $([math]::Round($zipSize/1MB, 2)) MB" -ForegroundColor Green
         Write-Host "----------------------------------------"
+    } else {
+        Write-Host "✗ Failed to download files from bucket" -ForegroundColor Red
     }
     
+    # Remove temporary directory
     Remove-Item -Path $tempDir.FullName -Recurse -Force
     Write-Host ""
-    Write-Host "Dump complete!" -ForegroundColor Green
+    Write-Host "Dump completed!" -ForegroundColor Green
 }
 
-# Get bucket info
-function Get-S3BucketInfo {
-    param([string]$BucketName)
-    
-    if ([string]::IsNullOrWhiteSpace($BucketName)) {
-        $BucketName = Read-Host "Enter bucket name"
-    }
-    
-    $null = aws s3api head-bucket --bucket $BucketName 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Error: Bucket '$BucketName' not found" -ForegroundColor Red
-        return
-    }
-    
-    Write-Host "Bucket Information: $BucketName" -ForegroundColor Blue
-    Write-Host "----------------------------------------"
-    
-    $region = aws s3api get-bucket-location --bucket $BucketName --query 'LocationConstraint' --output text
-    if ($region -eq "None") { $region = "us-east-1" }
-    Write-Host "Region: $region"
-    
-    $versioning = aws s3api get-bucket-versioning --bucket $BucketName --query 'Status' --output text
-    if ([string]::IsNullOrWhiteSpace($versioning)) { $versioning = "Disabled" }
-    Write-Host "Versioning: $versioning"
-    
-    Write-Host ""
-    Write-Host "Calculating bucket size..."
-    aws s3 ls "s3://$BucketName" --recursive --summarize | Select-Object -Last 2
-}
-
-# Main execution
-if (-not (Test-AwsCli)) {
-    exit 1
-}
-
-if (-not (Test-AwsCredentials)) {
-    exit 1
-}
-
+# -----------------------
+# Main
+# -----------------------
 if ([string]::IsNullOrWhiteSpace($Command)) {
     Show-Usage
     exit 0
 }
+
+if (-not (Test-AwsCli)) { exit 1 }
+if (-not (Test-AwsCredentials)) { exit 1 }
 
 switch ($Command) {
     'list' {
         Get-S3Buckets
     }
     'create' {
-        New-S3Bucket
+        if ($Arguments.Count -ge 1) {
+            New-S3Bucket -BucketName $Arguments[0]
+        } else {
+            New-S3Bucket
+        }
     }
     'delete' {
-        Delete-S3Bucket -BucketName $Arguments[0]
+        if ($Arguments.Count -ge 1) {
+            Delete-S3Bucket -BucketName $Arguments[0]
+        } else {
+            Delete-S3Bucket
+        }
     }
     'upload' {
-        Add-S3Files -Files $Arguments
+        if ($Arguments.Count -ge 2) {
+            Add-S3Files -Path $Arguments[0] -BucketName $Arguments[1]
+        } elseif ($Arguments.Count -ge 1) {
+            Add-S3Files -Path $Arguments[0]
+        } else {
+            Write-Host "Usage: .\s3_manager.ps1 upload <path> [bucket]" -ForegroundColor Yellow
+        }
     }
-    'download' {
-        Get-S3File -Args $Arguments
+    'download' { 
+        if ($Arguments.Count -ge 2) {
+            Get-S3File -BucketName $Arguments[0] -FileName $Arguments[1]
+        } else {
+            Write-Host "Usage: .\s3_manager.ps1 download <bucket> <file>" -ForegroundColor Yellow
+        }
     }
     'dump' {
-        Export-S3Bucket -BucketName $Arguments[0]
-    }
-    'info' {
-        Get-S3BucketInfo -BucketName $Arguments[0]
+        if ($Arguments.Count -ge 1) {
+            Export-S3Bucket -BucketName $Arguments[0]
+        } else {
+            Export-S3Bucket
+        }
     }
     'help' {
         Show-Usage
     }
     default {
-        Write-Host "Error: Unknown command '$Command'" -ForegroundColor Red
-        Write-Host ""
         Show-Usage
         exit 1
     }
