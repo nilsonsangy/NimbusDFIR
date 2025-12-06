@@ -77,6 +77,7 @@ def list_buckets():
     
     s3 = boto3.client('s3')
     
+    print_color("[AWS CLI] aws s3api list-buckets", Colors.CYAN)
     try:
         response = s3.list_buckets()
         buckets = response.get('Buckets', [])
@@ -113,6 +114,7 @@ def create_bucket(bucket_name=None):
     
     s3 = boto3.client('s3')
     
+    print_color(f"[AWS CLI] aws s3api create-bucket --bucket {bucket_name}", Colors.CYAN)
     try:
         s3.create_bucket(Bucket=bucket_name)
         print_color("✓ Bucket created successfully", Colors.GREEN)
@@ -169,6 +171,8 @@ def delete_bucket(bucket_name=None):
     
     print_color(f"Deleting bucket '{bucket_name}'...", Colors.YELLOW)
     
+    print_color(f"[AWS CLI] aws s3 rm s3://{bucket_name} --recursive", Colors.CYAN)
+    print_color(f"[AWS CLI] aws s3api delete-bucket --bucket {bucket_name}", Colors.CYAN)
     try:
         # Try to empty the bucket first
         try:
@@ -244,6 +248,7 @@ def upload_files(path, bucket_name=None):
     if os.path.isdir(path):
         # It's a directory - upload all files
         print_color(f"Uploading folder '{path}' to bucket '{bucket_name}'...", Colors.YELLOW)
+        print_color(f"[AWS CLI] aws s3 sync {path} s3://{bucket_name}/", Colors.CYAN)
         
         uploaded_count = 0
         for root, dirs, files in os.walk(path):
@@ -265,6 +270,7 @@ def upload_files(path, bucket_name=None):
         # It's a file - upload single file
         file_name = os.path.basename(path)
         print_color(f"Uploading file '{file_name}' to bucket '{bucket_name}'...", Colors.YELLOW)
+        print_color(f"[AWS CLI] aws s3 cp {path} s3://{bucket_name}/{file_name}", Colors.CYAN)
         
         try:
             s3.upload_file(path, bucket_name, file_name)
@@ -306,6 +312,7 @@ def download_file(bucket_name, file_name):
     os.makedirs(os.path.dirname(download_path), exist_ok=True)
     
     print_color(f"Downloading '{file_name}' from '{bucket_name}'...", Colors.YELLOW)
+    print_color(f"[AWS CLI] aws s3 cp s3://{bucket_name}/{file_name} {download_path}", Colors.CYAN)
     
     try:
         s3.download_file(bucket_name, file_name, download_path)
@@ -383,6 +390,7 @@ def dump_bucket(bucket_name=None):
     try:
         print()
         print_color("Downloading files from bucket...", Colors.YELLOW)
+        print_color(f"[AWS CLI] aws s3 sync s3://{bucket_name} <temp_folder>", Colors.CYAN)
         
         # List and download all objects
         bucket = boto3.resource('s3').Bucket(bucket_name)

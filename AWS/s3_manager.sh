@@ -63,6 +63,7 @@ list_buckets() {
     echo -e "${YELLOW}Listing S3 buckets...${NC}"
     echo ""
     
+    echo -e "${CYAN}[AWS CLI] aws s3api list-buckets --output json${NC}"
     local buckets_json=$(aws s3api list-buckets --output json)
     
     if [[ -z "$buckets_json" ]] || ! echo "$buckets_json" | jq -e '.Buckets | length > 0' &> /dev/null; then
@@ -99,6 +100,7 @@ create_bucket() {
     }
     
     echo -e "${YELLOW}Creating bucket '$bucket_name'...${NC}"
+    echo -e "${CYAN}[AWS CLI] aws s3api create-bucket --bucket $bucket_name${NC}"
     
     if aws s3api create-bucket --bucket "$bucket_name" &> /dev/null; then
         echo -e "${GREEN}✓ Bucket created successfully${NC}"
@@ -159,9 +161,11 @@ delete_bucket() {
     echo -e "${YELLOW}Deleting bucket '$bucket_name'...${NC}"
     
     # Try to empty the bucket first
+    echo -e "${CYAN}[AWS CLI] aws s3 rm s3://$bucket_name --recursive${NC}"
     aws s3 rm "s3://$bucket_name" --recursive &> /dev/null || true
     
     # Delete the bucket
+    echo -e "${CYAN}[AWS CLI] aws s3api delete-bucket --bucket $bucket_name${NC}"
     if aws s3api delete-bucket --bucket "$bucket_name" &> /dev/null; then
         echo -e "${GREEN}✓ Bucket deleted successfully${NC}"
     else
@@ -231,6 +235,7 @@ upload_files() {
     if [[ -d "$path" ]]; then
         # It's a directory - use sync
         echo -e "${YELLOW}Uploading folder '$path' to bucket '$bucket_name'...${NC}"
+        echo -e "${CYAN}[AWS CLI] aws s3 sync $path s3://$bucket_name/ --no-progress${NC}"
         aws s3 sync "$path" "s3://$bucket_name/" --no-progress
         
         if [[ $? -eq 0 ]]; then
@@ -243,6 +248,7 @@ upload_files() {
         # It's a file - use cp
         local file_name=$(basename "$path")
         echo -e "${YELLOW}Uploading file '$file_name' to bucket '$bucket_name'...${NC}"
+        echo -e "${CYAN}[AWS CLI] aws s3 cp $path s3://$bucket_name/$file_name${NC}"
         aws s3 cp "$path" "s3://$bucket_name/$file_name"
         
         if [[ $? -eq 0 ]]; then
@@ -289,6 +295,7 @@ download_file() {
     mkdir -p "$(dirname "$download_path")"
     
     echo -e "${YELLOW}Downloading '$file_name' from '$bucket_name'...${NC}"
+    echo -e "${CYAN}[AWS CLI] aws s3 cp s3://$bucket_name/$file_name $download_path${NC}"
     
     if aws s3 cp "s3://$bucket_name/$file_name" "$download_path"; then
         echo -e "${GREEN}✓ Download completed${NC}"
@@ -367,6 +374,7 @@ dump_bucket() {
     
     echo ""
     echo -e "${YELLOW}Downloading files from bucket...${NC}"
+    echo -e "${CYAN}[AWS CLI] aws s3 sync s3://$bucket_name $temp_dir --no-progress${NC}"
     
     # Download files and count successes
     aws s3 sync "s3://$bucket_name" "$temp_dir" --no-progress 2>&1

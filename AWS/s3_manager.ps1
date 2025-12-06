@@ -82,6 +82,7 @@ function Get-S3Buckets {
     Write-Host ""
     
     # Get buckets list
+    Write-Host "[AWS CLI] aws s3api list-buckets --output json" -ForegroundColor Magenta
     $jsonOutput = aws s3api list-buckets --output json
     $buckets = $jsonOutput | ConvertFrom-Json
     
@@ -118,6 +119,7 @@ function New-S3Bucket {
     }
     
     Write-Host "Creating bucket '$bucketName'..." -ForegroundColor Yellow
+    Write-Host "[AWS CLI] aws s3api create-bucket --bucket $bucketName" -ForegroundColor Magenta
     
     $result = aws s3api create-bucket --bucket $bucketName 2>&1
     
@@ -180,9 +182,11 @@ function Delete-S3Bucket {
     Write-Host "Deleting bucket '$BucketName'..." -ForegroundColor Yellow
     
     # Try to empty the bucket first
+    Write-Host "[AWS CLI] aws s3 rm s3://$BucketName --recursive" -ForegroundColor Magenta
     aws s3 rm "s3://$BucketName" --recursive 2>&1 | Out-Null
     
     # Delete the bucket
+    Write-Host "[AWS CLI] aws s3api delete-bucket --bucket $BucketName" -ForegroundColor Magenta
     aws s3api delete-bucket --bucket $BucketName 2>&1
     
     if ($LASTEXITCODE -eq 0) {
@@ -208,6 +212,7 @@ function Get-S3File {
     }
 
     # Verify bucket exists
+    Write-Host "[AWS CLI] aws s3api head-bucket --bucket $BucketName" -ForegroundColor Magenta
     $null = aws s3api head-bucket --bucket $BucketName 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Error: Bucket '$BucketName' not found or access denied" -ForegroundColor Red
@@ -229,6 +234,7 @@ function Get-S3File {
     }
 
     Write-Host "Downloading '$FileName' from '$BucketName'..." -ForegroundColor Yellow
+    Write-Host "[AWS CLI] aws s3 cp s3://$BucketName/$FileName $downloadPath" -ForegroundColor Magenta
     aws s3 cp "s3://$BucketName/$FileName" $downloadPath
 
     if ($LASTEXITCODE -eq 0) {
@@ -262,6 +268,7 @@ function Add-S3Files {
     if ([string]::IsNullOrWhiteSpace($BucketName)) {
         Write-Host "Available buckets:" -ForegroundColor Yellow
         
+        Write-Host "[AWS CLI] aws s3api list-buckets --output json" -ForegroundColor Magenta
         $jsonOutput = aws s3api list-buckets --output json
         $bucketsData = $jsonOutput | ConvertFrom-Json
         
@@ -293,6 +300,7 @@ function Add-S3Files {
     }
     
     # Verify bucket exists
+    Write-Host "[AWS CLI] aws s3api head-bucket --bucket $BucketName" -ForegroundColor Magenta
     $null = aws s3api head-bucket --bucket $BucketName 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Error: Bucket '$BucketName' not found or access denied" -ForegroundColor Red
@@ -305,6 +313,7 @@ function Add-S3Files {
     if ($item.PSIsContainer) {
         # It's a directory - use sync
         Write-Host "Uploading folder '$Path' to bucket '$BucketName'..." -ForegroundColor Yellow
+        Write-Host "[AWS CLI] aws s3 sync $Path s3://$BucketName/ --no-progress" -ForegroundColor Magenta
         aws s3 sync $Path "s3://$BucketName/" --no-progress
         
         if ($LASTEXITCODE -eq 0) {
@@ -316,6 +325,7 @@ function Add-S3Files {
         # It's a file - use cp
         $fileName = $item.Name
         Write-Host "Uploading file '$fileName' to bucket '$BucketName'..." -ForegroundColor Yellow
+        Write-Host "[AWS CLI] aws s3 cp $Path s3://$BucketName/$fileName" -ForegroundColor Magenta
         aws s3 cp $Path "s3://$BucketName/$fileName"
         
         if ($LASTEXITCODE -eq 0) {
@@ -334,6 +344,7 @@ function Export-S3Bucket {
     if ([string]::IsNullOrWhiteSpace($BucketName)) {
         Write-Host "Available buckets:" -ForegroundColor Yellow
         
+        Write-Host "[AWS CLI] aws s3api list-buckets --output json" -ForegroundColor Magenta
         $jsonOutput = aws s3api list-buckets --output json
         $bucketsData = $jsonOutput | ConvertFrom-Json
         
@@ -365,6 +376,7 @@ function Export-S3Bucket {
     }
     
     # Verify bucket exists
+    Write-Host "[AWS CLI] aws s3api head-bucket --bucket $BucketName" -ForegroundColor Magenta
     $null = aws s3api head-bucket --bucket $BucketName 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Error: Bucket '$BucketName' not found or access denied" -ForegroundColor Red
@@ -394,6 +406,7 @@ function Export-S3Bucket {
     
     Write-Host ""
     Write-Host "Downloading files from bucket..." -ForegroundColor Yellow
+    Write-Host "[AWS CLI] aws s3 sync s3://$BucketName $($tempDir.FullName) --no-progress" -ForegroundColor Magenta
     
     # Use aws s3 sync with error handling
     $syncOutput = aws s3 sync "s3://$BucketName" $tempDir.FullName --no-progress 2>&1
