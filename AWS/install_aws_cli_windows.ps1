@@ -1,7 +1,10 @@
 # AWS CLI Installation Script for Windows
 # Author: NimbusDFIR
+# Usage: .\install_aws_cli_windows.ps1 [-Uninstall]
 
-param()
+param(
+    [switch]$Uninstall
+)
 
 function Test-Administrator {
     $user = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -32,6 +35,78 @@ if (-NOT (Test-Administrator)) {
         Write-Host "Failed to elevate privileges." -ForegroundColor Red
         exit 1
     }
+}
+
+function Uninstall-AWSCLI {
+    Write-Host "AWS CLI Uninstallation Script" -ForegroundColor Yellow
+    Write-Host "Running with administrator privileges" -ForegroundColor Green
+    Write-Host ""
+    
+    # Try uninstall via winget first
+    $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
+    if ($wingetCmd) {
+        Write-Host "[Command] winget uninstall Amazon.AWSCLI --silent" -ForegroundColor DarkCyan
+        try {
+            $process = Start-Process winget -ArgumentList @("uninstall", "Amazon.AWSCLI", "--silent") -Wait -PassThru -NoNewWindow
+            if ($process.ExitCode -eq 0) {
+                Write-Host "AWS CLI uninstalled via winget." -ForegroundColor Green
+                exit 0
+            }
+        } catch {
+            Write-Host "Winget uninstall failed, trying MSI method..." -ForegroundColor Yellow
+        }
+    }
+    
+    # Try MSI uninstall
+    Write-Host "[Command] Get-WmiObject -Class Win32_Product | Where-Object { `$_.Name -like '*AWS Command Line*' } | ForEach-Object { `$_.Uninstall() }" -ForegroundColor DarkCyan
+    $awsProducts = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like '*AWS Command Line*' }
+    if ($awsProducts) {
+        foreach ($product in $awsProducts) {
+            Write-Host "Uninstalling: $($product.Name)" -ForegroundColor Gray
+            $product.Uninstall() | Out-Null
+        }
+        Write-Host "AWS CLI uninstalled successfully." -ForegroundColor Green
+    } else {
+        Write-Host "AWS CLI installation not found via Windows Installer." -ForegroundColor Yellow
+        
+        # Manual cleanup
+        $awsPath = "$env:ProgramFiles\Amazon\AWSCLIV2"
+        if (Test-Path $awsPath) {
+            Write-Host "[Command] Remove-Item -Recurse -Force '$awsPath'" -ForegroundColor DarkCyan
+            Remove-Item -Recurse -Force $awsPath
+            Write-Host "Removed AWS CLI directory." -ForegroundColor Green
+        }
+        
+        # Remove from PATH
+        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+        $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+        if ($userPath -like "*Amazon\AWSCLIV2*" -or $machinePath -like "*Amazon\AWSCLIV2*") {
+            Write-Host "Cleaning PATH environment variable..." -ForegroundColor Gray
+            $userPath = ($userPath -split ';' | Where-Object { $_ -notlike "*Amazon\AWSCLIV2*" }) -join ';'
+            $machinePath = ($machinePath -split ';' | Where-Object { $_ -notlike "*Amazon\AWSCLIV2*" }) -join ';'
+            [Environment]::SetEnvironmentVariable('Path', $userPath, 'User')
+            [Environment]::SetEnvironmentVariable('Path', $machinePath, 'Machine')
+            Write-Host "PATH cleaned." -ForegroundColor Green
+        }
+    }
+    
+    Write-Host "Uninstall complete." -ForegroundColor Green
+    exit 0
+}
+
+if ($Uninstall) {
+    if (-NOT (Test-Administrator)) {
+        Write-Host "Administrator privileges required. Requesting elevation..." -ForegroundColor Yellow
+        try {
+            $scriptPath = $MyInvocation.MyCommand.Path
+            Start-Process PowerShell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -Uninstall" -Wait
+            exit 0
+        } catch {
+            Write-Host "Failed to elevate privileges." -ForegroundColor Red
+            exit 1
+        }
+    }
+    Uninstall-AWSCLI
 }
 
 Write-Host "AWS CLI Installation Script" -ForegroundColor Blue

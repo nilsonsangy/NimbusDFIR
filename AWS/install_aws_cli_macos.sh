@@ -3,8 +3,34 @@
 # Script to install AWS CLI on macOS
 # Author: NimbusDFIR
 # Description: Downloads and installs the latest AWS CLI v2 for macOS
+# Usage: ./install_aws_cli_macos.sh [--uninstall]
 
 set -e
+
+uninstall_aws_cli() {
+    echo "=========================================="
+    echo "Uninstalling AWS CLI v2 from macOS"
+    echo "=========================================="
+    echo ""
+    
+    echo "[Command] sudo rm -f /usr/local/bin/aws"
+    sudo rm -f /usr/local/bin/aws
+    
+    echo "[Command] sudo rm -f /usr/local/bin/aws_completer"
+    sudo rm -f /usr/local/bin/aws_completer
+    
+    echo "[Command] sudo rm -rf /usr/local/aws-cli"
+    sudo rm -rf /usr/local/aws-cli
+    
+    echo ""
+    echo "AWS CLI uninstalled successfully."
+    exit 0
+}
+
+# Check for uninstall flag
+if [[ "${1:-}" == "--uninstall" ]] || [[ "${1:-}" == "-u" ]]; then
+    uninstall_aws_cli
+fi
 
 echo "=========================================="
 echo "AWS CLI Installation Script for macOS"
