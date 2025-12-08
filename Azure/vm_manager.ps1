@@ -171,6 +171,31 @@ function New-VM {
         }
     }
     
+    # Get VM location (only if resource group was just created)
+    if ($createNew) {
+        Write-Host ""
+        Write-Host "Select VM Location (lowest cost regions):" -ForegroundColor Cyan
+        Write-Host "  1. westus2         - West US 2"
+        Write-Host "  2. eastus          - East US"
+        Write-Host "  3. southcentralus  - South Central US"
+        Write-Host "  4. northcentralus  - North Central US"
+        Write-Host "  5. centralus       - Central US"
+        Write-Host ""
+        $locationChoice = Read-Host "Choose location [1-5] (default: 2 - East US)"
+        if ([string]::IsNullOrWhiteSpace($locationChoice)) {
+            $locationChoice = "2"
+        }
+        
+        $location = switch ($locationChoice) {
+            "1" { "westus2" }
+            "2" { "eastus" }
+            "3" { "southcentralus" }
+            "4" { "northcentralus" }
+            "5" { "centralus" }
+            default { "eastus" }
+        }
+    }
+    
     # Get VM size
     Write-Host ""
     Write-Host "Select VM Size:" -ForegroundColor Cyan
