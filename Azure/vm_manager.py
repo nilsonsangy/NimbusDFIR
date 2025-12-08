@@ -32,7 +32,16 @@ def run_az_command(command, capture_output=True, check=True):
     """Run Azure CLI command and return result"""
     try:
         if isinstance(command, str):
+            # Print command before execution
+            print_colored(f"[Azure CLI] {command}", Colors.CYAN)
             command = command.split()
+        else:
+            # Command is already a list - mask password if present
+            display_cmd = command.copy()
+            for i, arg in enumerate(display_cmd):
+                if arg in ['--admin-password', '--password', '-p'] and i + 1 < len(display_cmd):
+                    display_cmd[i + 1] = '********'
+            print_colored(f"[Azure CLI] {' '.join(display_cmd)}", Colors.CYAN)
         
         result = subprocess.run(
             command,

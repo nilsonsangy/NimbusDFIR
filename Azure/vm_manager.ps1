@@ -9,6 +9,11 @@ param(
     [string]$VMName
 )
 
+function Write-AzCommand {
+    param([string]$Command)
+    Write-Host "[Azure CLI] $Command" -ForegroundColor DarkCyan
+}
+
 # Check if Azure CLI is installed
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     Write-Host "ERROR: Azure CLI is not installed" -ForegroundColor Red
@@ -53,6 +58,7 @@ function Get-VMs {
     Write-Host "Listing Azure VMs..." -ForegroundColor Blue
     Write-Host ""
     
+    Write-AzCommand "az vm list --output json"
     $vms = az vm list --output json 2>$null | ConvertFrom-Json
     
     if (-not $vms -or $vms.Count -eq 0) {
@@ -64,6 +70,7 @@ function Get-VMs {
     Write-Host "----------------------------------------------------------------------------------------"
     
     foreach ($vm in $vms) {
+        Write-AzCommand "az vm get-instance-view --name $($vm.name) --resource-group $($vm.resourceGroup) --query `"instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus`" -o tsv"
         $powerState = az vm get-instance-view --name $vm.name --resource-group $vm.resourceGroup --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" -o tsv 2>$null
         
         $color = "White"
@@ -82,52 +89,86 @@ function New-VM {
     Write-Host ""
     
     # Get VM name
-    $vmName = Read-Host "Enter VM name (default: azure-vm-$(Get-Date -Format 'yyyyMMddHHmmss'))"
+    $vmName = Read-Host "Enter VM name (default: azvm-$(Get-Date -Format 'yyMMddHHmmss'))"
     if ([string]::IsNullOrWhiteSpace($vmName)) {
-        $vmName = "azure-vm-$(Get-Date -Format 'yyyyMMddHHmmss')"
+        $vmName = "azvm-$(Get-Date -Format 'yyMMddHHmmss')"
+    }
+    
+    # Validate VM name length (max 15 chars for Windows, 64 for Linux)
+    if ($vmName.Length -gt 15) {
+        Write-Host "Warning: VM name too long (max 15 chars for Windows). Truncating..." -ForegroundColor Yellow
+        $vmName = $vmName.Substring(0, 15)
+        Write-Host "Using VM name: $vmName" -ForegroundColor Cyan
     }
     
     # Get or create resource group
     Write-Host ""
     Write-Host "Available Resource Groups:" -ForegroundColor Cyan
+    Write-AzCommand "az group list --query `"[].{Name:name, Location:location}`" -o json"
     $resourceGroups = az group list --query "[].{Name:name, Location:location}" -o json | ConvertFrom-Json
     
     if ($resourceGroups -and $resourceGroups.Count -gt 0) {
         for ($i = 0; $i -lt $resourceGroups.Count; $i++) {
             Write-Host "  $($i+1). $($resourceGroups[$i].Name) ($($resourceGroups[$i].Location))"
         }
+        Write-Host "  $($resourceGroups.Count + 1). Create new resource group" -ForegroundColor Green
     } else {
         Write-Host "  No resource groups found"
+        Write-Host "  1. Create new resource group" -ForegroundColor Green
     }
     
     Write-Host ""
-    $rgInput = Read-Host "Enter resource group name or number (default: rg-forensics)"
+    $rgInput = Read-Host "Select resource group [1-$($resourceGroups.Count + 1)]"
+    
     if ([string]::IsNullOrWhiteSpace($rgInput)) {
-        $rgName = "rg-forensics"
-    } elseif ($rgInput -match '^[0-9]+$') {
+        Write-Host "No selection made. Exiting..." -ForegroundColor Yellow
+        exit 0
+    }
+    
+    # Check if user wants to create new resource group
+    $createNew = $false
+    if ($rgInput -match '^[0-9]+$') {
         $rgIndex = [int]$rgInput - 1
         if ($resourceGroups -and $rgIndex -ge 0 -and $rgIndex -lt $resourceGroups.Count) {
             $rgName = $resourceGroups[$rgIndex].Name
+            Write-AzCommand "az group show --name $rgName --query location -o tsv"
+            $location = az group show --name $rgName --query location -o tsv
+        } elseif ($rgInput -eq ($resourceGroups.Count + 1).ToString()) {
+            $createNew = $true
         } else {
-            Write-Host "Invalid resource group number. Using default: rg-forensics" -ForegroundColor Yellow
-            $rgName = "rg-forensics"
+            Write-Host "Invalid selection. Exiting..." -ForegroundColor Red
+            exit 1
         }
     } else {
-        $rgName = $rgInput
+        Write-Host "Invalid selection. Exiting..." -ForegroundColor Red
+        exit 1
     }
     
-    # Check if resource group exists
-    $rgExists = az group show --name $rgName 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Resource group does not exist. Creating..." -ForegroundColor Yellow
+    # Create new resource group if requested
+    if ($createNew) {
+        Write-Host ""
+        $rgName = Read-Host "Enter name for new resource group"
+        if ([string]::IsNullOrWhiteSpace($rgName)) {
+            Write-Host "No name provided. Exiting..." -ForegroundColor Yellow
+            exit 0
+        }
+        
         $location = Read-Host "Enter location (default: northcentralus)"
         if ([string]::IsNullOrWhiteSpace($location)) {
             $location = "northcentralus"
         }
+        
+        Write-Host ""
+        Write-Host "Creating resource group '$rgName' in '$location'..." -ForegroundColor Yellow
+        Write-AzCommand "az group create --name $rgName --location $location --output table"
         az group create --name $rgName --location $location --output table
-        Write-Host "✓ Resource group created" -ForegroundColor Green
-    } else {
-        $location = az group show --name $rgName --query location -o tsv
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✓ Resource group created" -ForegroundColor Green
+        } else {
+            Write-Host "✗ Failed to create resource group" -ForegroundColor Red
+            exit 1
+        }
     }
     
     # Get VM size
@@ -193,13 +234,16 @@ function New-VM {
     
     # Build command
     $cmd = "az vm create --name $vmName --resource-group $rgName --location $location --size $vmSize --image $image --admin-username $adminUser"
+    $cmdDisplay = $cmd
     
     if ($authMethod -eq "1") {
         $cmd += " --generate-ssh-keys"
+        $cmdDisplay += " --generate-ssh-keys"
     } else {
         $adminPassword = Read-Host "Enter admin password" -AsSecureString
         $adminPasswordText = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($adminPassword))
         $cmd += " --admin-password '$adminPasswordText'"
+        $cmdDisplay += " --admin-password '********'"
     }
     
     # Ask about public IP
@@ -207,12 +251,14 @@ function New-VM {
     $publicIP = Read-Host "Assign public IP? (y/N)"
     if ($publicIP -ne "y" -and $publicIP -ne "Y") {
         $cmd += " --public-ip-address ''"
+        $cmdDisplay += " --public-ip-address ''"
     }
     
     Write-Host ""
     Write-Host "Creating VM... (this may take a few minutes)" -ForegroundColor Yellow
     Write-Host "[INFO] VM: $vmName | Size: $vmSize | Image: $image | Location: $location" -ForegroundColor Blue
     Write-Host ""
+    Write-AzCommand $cmdDisplay
     
     Invoke-Expression $cmd
     
@@ -223,6 +269,7 @@ function New-VM {
         
         # Get VM details
         Write-Host "VM Details:" -ForegroundColor Cyan
+        Write-AzCommand "az vm show --name $vmName --resource-group $rgName --show-details --query '{Name:name, ResourceGroup:resourceGroup, Location:location, Size:hardwareProfile.vmSize, PublicIP:publicIps, PrivateIP:privateIps}' -o table"
         az vm show --name $vmName --resource-group $rgName --show-details --query "{Name:name, ResourceGroup:resourceGroup, Location:location, Size:hardwareProfile.vmSize, PublicIP:publicIps, PrivateIP:privateIps}" -o table
     } else {
         Write-Host "✗ Failed to create VM" -ForegroundColor Red
@@ -238,6 +285,7 @@ function Remove-VM {
         Write-Host "Available VMs to delete:" -ForegroundColor Cyan
         Write-Host ""
         
+        Write-AzCommand "az vm list --output json"
         $vms = az vm list --output json 2>$null | ConvertFrom-Json
         
         if (-not $vms -or $vms.Count -eq 0) {
@@ -286,6 +334,7 @@ function Remove-VM {
     else {
         # Find VM and get resource group
         Write-Host "Finding VM: $VMName" -ForegroundColor Blue
+        Write-AzCommand "az vm list --query `"[?name=='$VMName']`" -o json"
         $vmInfo = az vm list --query "[?name=='$VMName']" -o json | ConvertFrom-Json
         
         if (-not $vmInfo -or $vmInfo.Count -eq 0) {
@@ -308,6 +357,7 @@ function Remove-VM {
     Write-Host "Deleting VM and associated resources..." -ForegroundColor Yellow
     
     # Delete VM and associated resources
+    Write-AzCommand "az vm delete --name $VMName --resource-group $rgName --yes"
     az vm delete --name $VMName --resource-group $rgName --yes
     
     if ($LASTEXITCODE -eq 0) {
@@ -321,10 +371,12 @@ function Remove-VM {
             
             # Delete NICs
             Write-Host "[INFO] Deleting Network Interfaces..." -ForegroundColor Blue
+            Write-AzCommand "az network nic list --resource-group $rgName --query `"[?contains(name, '$VMName')].[name]`" -o tsv"
             $nics = az network nic list --resource-group $rgName --query "[?contains(name, '$VMName')].[name]" -o tsv
             foreach ($nic in $nics) {
                 if ($nic.Trim()) {
                     Write-Host "  Deleting NIC: $nic" -ForegroundColor Yellow
+                    Write-AzCommand "az network nic delete --resource-group $rgName --name $nic"
                     az network nic delete --resource-group $rgName --name $nic
                     if ($LASTEXITCODE -eq 0) {
                         Write-Host "    ✓ NIC deleted: $nic" -ForegroundColor Green
@@ -336,10 +388,12 @@ function Remove-VM {
             
             # Delete Public IPs
             Write-Host "[INFO] Deleting Public IP addresses..." -ForegroundColor Blue
+            Write-AzCommand "az network public-ip list --resource-group $rgName --query `"[?contains(name, '$VMName')].[name]`" -o tsv"
             $publicIPs = az network public-ip list --resource-group $rgName --query "[?contains(name, '$VMName')].[name]" -o tsv
             foreach ($publicIP in $publicIPs) {
                 if ($publicIP.Trim()) {
                     Write-Host "  Deleting Public IP: $publicIP" -ForegroundColor Yellow
+                    Write-AzCommand "az network public-ip delete --resource-group $rgName --name $publicIP"
                     az network public-ip delete --resource-group $rgName --name $publicIP
                     if ($LASTEXITCODE -eq 0) {
                         Write-Host "    ✓ Public IP deleted: $publicIP" -ForegroundColor Green
@@ -351,10 +405,12 @@ function Remove-VM {
             
             # Delete Network Security Groups
             Write-Host "[INFO] Deleting Network Security Groups..." -ForegroundColor Blue
+            Write-AzCommand "az network nsg list --resource-group $rgName --query `"[?contains(name, '$VMName')].[name]`" -o tsv"
             $nsgs = az network nsg list --resource-group $rgName --query "[?contains(name, '$VMName')].[name]" -o tsv
             foreach ($nsg in $nsgs) {
                 if ($nsg.Trim()) {
                     Write-Host "  Deleting NSG: $nsg" -ForegroundColor Yellow
+                    Write-AzCommand "az network nsg delete --resource-group $rgName --name $nsg"
                     az network nsg delete --resource-group $rgName --name $nsg
                     if ($LASTEXITCODE -eq 0) {
                         Write-Host "    ✓ NSG deleted: $nsg" -ForegroundColor Green
@@ -366,10 +422,12 @@ function Remove-VM {
             
             # Delete Disks
             Write-Host "[INFO] Deleting Disks..." -ForegroundColor Blue
+            Write-AzCommand "az disk list --resource-group $rgName --query `"[?contains(name, '$VMName')].[name]`" -o tsv"
             $disks = az disk list --resource-group $rgName --query "[?contains(name, '$VMName')].[name]" -o tsv
             foreach ($disk in $disks) {
                 if ($disk.Trim()) {
                     Write-Host "  Deleting disk: $disk" -ForegroundColor Yellow
+                    Write-AzCommand "az disk delete --resource-group $rgName --name $disk --yes"
                     az disk delete --resource-group $rgName --name $disk --yes
                     if ($LASTEXITCODE -eq 0) {
                         Write-Host "    ✓ Disk deleted: $disk" -ForegroundColor Green
@@ -381,10 +439,12 @@ function Remove-VM {
             
             # Delete Virtual Networks (only if they are VM-specific)
             Write-Host "[INFO] Checking Virtual Networks..." -ForegroundColor Blue
+            Write-AzCommand "az network vnet list --resource-group $rgName --query `"[?contains(name, '$VMName')].[name]`" -o tsv"
             $vnets = az network vnet list --resource-group $rgName --query "[?contains(name, '$VMName')].[name]" -o tsv
             foreach ($vnet in $vnets) {
                 if ($vnet.Trim()) {
                     Write-Host "  Deleting VNET: $vnet" -ForegroundColor Yellow
+                    Write-AzCommand "az network vnet delete --resource-group $rgName --name $vnet"
                     az network vnet delete --resource-group $rgName --name $vnet
                     if ($LASTEXITCODE -eq 0) {
                         Write-Host "    ✓ VNET deleted: $vnet" -ForegroundColor Green
@@ -463,6 +523,7 @@ function Start-AzureVM {
     }
     else {
         # Find VM and get resource group
+        Write-AzCommand "az vm list --query `"[?name=='$VMName']`" -o json"
         $vmInfo = az vm list --query "[?name=='$VMName']" -o json | ConvertFrom-Json
         
         if (-not $vmInfo -or $vmInfo.Count -eq 0) {
@@ -474,6 +535,7 @@ function Start-AzureVM {
     }
     
     Write-Host "Starting VM: $VMName" -ForegroundColor Yellow
+    Write-AzCommand "az vm start --name $VMName --resource-group $rgName"
     az vm start --name $VMName --resource-group $rgName
     
     if ($LASTEXITCODE -eq 0) {
@@ -544,6 +606,7 @@ function Stop-AzureVM {
     }
     else {
         # Find VM and get resource group
+        Write-AzCommand "az vm list --query `"[?name=='$VMName']`" -o json"
         $vmInfo = az vm list --query "[?name=='$VMName']" -o json | ConvertFrom-Json
         
         if (-not $vmInfo -or $vmInfo.Count -eq 0) {
@@ -555,6 +618,7 @@ function Stop-AzureVM {
     }
     
     Write-Host "Stopping and deallocating VM: $VMName" -ForegroundColor Yellow
+    Write-AzCommand "az vm deallocate --name $VMName --resource-group $rgName"
     az vm deallocate --name $VMName --resource-group $rgName
     
     if ($LASTEXITCODE -eq 0) {

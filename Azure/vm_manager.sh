@@ -14,6 +14,11 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Function to print Azure CLI commands
+print_az_cmd() {
+    echo -e "${CYAN}[Azure CLI] $*${NC}"
+}
+
 # Check if Azure CLI is installed
 if ! command -v az &> /dev/null; then
     echo -e "${RED}Error: Azure CLI is not installed${NC}"
@@ -59,6 +64,7 @@ list_vms() {
     echo -e "${BLUE}Listing Azure VMs...${NC}"
     echo ""
     
+    print_az_cmd "az vm list --output json"
     VMS=$(az vm list --output json 2>/dev/null)
     
     if [ "$VMS" == "[]" ] || [ -z "$VMS" ]; then
@@ -71,6 +77,7 @@ list_vms() {
     
     echo "$VMS" | jq -r '.[] | [.name, .resourceGroup, .location, .hardwareProfile.vmSize] | @tsv' | while IFS=$'\t' read -r name rg location size; do
         # Get power state
+        print_az_cmd "az vm get-instance-view --name $name --resource-group $rg --query \"instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus\" -o tsv"
         POWER_STATE=$(az vm get-instance-view --name "$name" --resource-group "$rg" --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" -o tsv 2>/dev/null)
         
         if [[ "$POWER_STATE" == *"running"* ]]; then
@@ -95,6 +102,7 @@ create_vm() {
     # Get or create resource group
     echo ""
     echo -e "${CYAN}Available Resource Groups:${NC}"
+    print_az_cmd "az group list --query \"[].{Name:name, Location:location}\" -o json"
     RG_LIST=$(az group list --query "[].{Name:name, Location:location}" -o json)
     
     if [ "$RG_LIST" != "[]" ]; then
@@ -121,6 +129,7 @@ create_vm() {
     fi
     
     # Check if resource group exists
+    print_az_cmd "az group show --name $RG_NAME"
     if ! az group show --name "$RG_NAME" &> /dev/null; then
         echo -e "${YELLOW}Resource group does not exist. Creating...${NC}"
         read -p "Enter location (default: northcentralus): " LOCATION
@@ -128,6 +137,7 @@ create_vm() {
         az group create --name "$RG_NAME" --location "$LOCATION" --output table
         echo -e "${GREEN}✓ Resource group created${NC}"
     else
+        print_az_cmd "az group show --name $RG_NAME --query location -o tsv"
         LOCATION=$(az group show --name "$RG_NAME" --query location -o tsv)
     fi
     
@@ -186,13 +196,16 @@ create_vm() {
     
     # Build command
     CMD="az vm create --name $VM_NAME --resource-group $RG_NAME --location $LOCATION --size $VM_SIZE --image $IMAGE --admin-username $ADMIN_USER"
+    CMD_DISPLAY="$CMD"
     
     if [ "$AUTH_METHOD" == "1" ]; then
         CMD="$CMD --generate-ssh-keys"
+        CMD_DISPLAY="$CMD_DISPLAY --generate-ssh-keys"
     else
         read -sp "Enter admin password: " ADMIN_PASSWORD
         echo ""
         CMD="$CMD --admin-password '$ADMIN_PASSWORD'"
+        CMD_DISPLAY="$CMD_DISPLAY --admin-password '********'"
     fi
     
     # Ask about public IP
@@ -201,14 +214,16 @@ create_vm() {
     PUBLIC_IP=${PUBLIC_IP:-n}
     if [ "$PUBLIC_IP" != "y" ] && [ "$PUBLIC_IP" != "Y" ]; then
         CMD="$CMD --public-ip-address ''"
+        CMD_DISPLAY="$CMD_DISPLAY --public-ip-address ''"
     fi
     
     echo ""
     echo -e "${YELLOW}Creating VM... (this may take a few minutes)${NC}"
-    echo -e "${BLUE}[INFO]${NC} VM: $VM_NAME | Size: $VM_SIZE | Image: $IMAGE | Location: $LOCATION"
+    echo -e "${BLUE}[INFO] VM: $VM_NAME | Size: $VM_SIZE | Image: $IMAGE | Location: $LOCATION${NC}"
     echo ""
+    print_az_cmd "$CMD_DISPLAY"
     
-    eval $CMD
+    eval "$CMD"
     
     if [ $? -eq 0 ]; then
         echo ""
@@ -299,6 +314,7 @@ delete_vm() {
     else
         # Find VM and get resource group
         echo -e "${BLUE}Finding VM: $VM_NAME${NC}"
+        print_az_cmd "az vm list --query \"[?name=='$VM_NAME']\" -o json"
         VM_INFO=$(az vm list --query "[?name=='$VM_NAME']" -o json)
         
         if [ "$VM_INFO" == "[]" ]; then
@@ -321,6 +337,7 @@ delete_vm() {
     echo -e "${YELLOW}Deleting VM and associated resources...${NC}"
     
     # Delete VM and associated resources
+    print_az_cmd "az vm delete --name $VM_NAME --resource-group $RG_NAME --yes"
     az vm delete --name "$VM_NAME" --resource-group "$RG_NAME" --yes
     
     if [ $? -eq 0 ]; then
@@ -334,9 +351,11 @@ delete_vm() {
             
             # Delete NICs
             echo -e "${BLUE}[INFO] Deleting Network Interfaces...${NC}"
+            print_az_cmd "az network nic list --resource-group $RG_NAME --query \"[?contains(name, '$VM_NAME')].[name]\" -o tsv"
             az network nic list --resource-group "$RG_NAME" --query "[?contains(name, '$VM_NAME')].[name]" -o tsv | while read nic; do
                 if [ -n "$nic" ]; then
                     echo -e "${YELLOW}  Deleting NIC: $nic${NC}"
+                    print_az_cmd "az network nic delete --resource-group $RG_NAME --name $nic"
                     if az network nic delete --resource-group "$RG_NAME" --name "$nic"; then
                         echo -e "${GREEN}    ✓ NIC deleted: $nic${NC}"
                     else
@@ -347,9 +366,11 @@ delete_vm() {
             
             # Delete Public IPs
             echo -e "${BLUE}[INFO] Deleting Public IP addresses...${NC}"
+            print_az_cmd "az network public-ip list --resource-group $RG_NAME --query \"[?contains(name, '$VM_NAME')].[name]\" -o tsv"
             az network public-ip list --resource-group "$RG_NAME" --query "[?contains(name, '$VM_NAME')].[name]" -o tsv | while read public_ip; do
                 if [ -n "$public_ip" ]; then
                     echo -e "${YELLOW}  Deleting Public IP: $public_ip${NC}"
+                    print_az_cmd "az network public-ip delete --resource-group $RG_NAME --name $public_ip"
                     if az network public-ip delete --resource-group "$RG_NAME" --name "$public_ip"; then
                         echo -e "${GREEN}    ✓ Public IP deleted: $public_ip${NC}"
                     else
@@ -360,9 +381,11 @@ delete_vm() {
             
             # Delete Network Security Groups
             echo -e "${BLUE}[INFO] Deleting Network Security Groups...${NC}"
+            print_az_cmd "az network nsg list --resource-group $RG_NAME --query \"[?contains(name, '$VM_NAME')].[name]\" -o tsv"
             az network nsg list --resource-group "$RG_NAME" --query "[?contains(name, '$VM_NAME')].[name]" -o tsv | while read nsg; do
                 if [ -n "$nsg" ]; then
                     echo -e "${YELLOW}  Deleting NSG: $nsg${NC}"
+                    print_az_cmd "az network nsg delete --resource-group $RG_NAME --name $nsg"
                     if az network nsg delete --resource-group "$RG_NAME" --name "$nsg"; then
                         echo -e "${GREEN}    ✓ NSG deleted: $nsg${NC}"
                     else
@@ -373,9 +396,11 @@ delete_vm() {
             
             # Delete Disks
             echo -e "${BLUE}[INFO] Deleting Disks...${NC}"
+            print_az_cmd "az disk list --resource-group $RG_NAME --query \"[?contains(name, '$VM_NAME')].[name]\" -o tsv"
             az disk list --resource-group "$RG_NAME" --query "[?contains(name, '$VM_NAME')].[name]" -o tsv | while read disk; do
                 if [ -n "$disk" ]; then
                     echo -e "${YELLOW}  Deleting disk: $disk${NC}"
+                    print_az_cmd "az disk delete --resource-group $RG_NAME --name $disk --yes"
                     if az disk delete --resource-group "$RG_NAME" --name "$disk" --yes; then
                         echo -e "${GREEN}    ✓ Disk deleted: $disk${NC}"
                     else
@@ -386,9 +411,11 @@ delete_vm() {
             
             # Delete Virtual Networks (only if they are VM-specific)
             echo -e "${BLUE}[INFO] Checking Virtual Networks...${NC}"
+            print_az_cmd "az network vnet list --resource-group $RG_NAME --query \"[?contains(name, '$VM_NAME')].[name]\" -o tsv"
             az network vnet list --resource-group "$RG_NAME" --query "[?contains(name, '$VM_NAME')].[name]" -o tsv | while read vnet; do
                 if [ -n "$vnet" ]; then
                     echo -e "${YELLOW}  Deleting VNET: $vnet${NC}"
+                    print_az_cmd "az network vnet delete --resource-group $RG_NAME --name $vnet"
                     if az network vnet delete --resource-group "$RG_NAME" --name "$vnet"; then
                         echo -e "${GREEN}    ✓ VNET deleted: $vnet${NC}"
                     else
@@ -477,6 +504,7 @@ start_vm() {
         rm -f /tmp/stopped_vms.txt
     else
         # Find VM and get resource group
+        print_az_cmd "az vm list --query \"[?name=='$VM_NAME']\" -o json"
         VM_INFO=$(az vm list --query "[?name=='$VM_NAME']" -o json)
         
         if [ "$VM_INFO" == "[]" ]; then
@@ -488,6 +516,7 @@ start_vm() {
     fi
     
     echo -e "${YELLOW}Starting VM: $VM_NAME${NC}"
+    print_az_cmd "az vm start --name $VM_NAME --resource-group $RG_NAME"
     az vm start --name "$VM_NAME" --resource-group "$RG_NAME"
     
     if [ $? -eq 0 ]; then
@@ -567,6 +596,7 @@ stop_vm() {
         rm -f /tmp/running_vms.txt
     else
         # Find VM and get resource group
+        print_az_cmd "az vm list --query \"[?name=='$VM_NAME']\" -o json"
         VM_INFO=$(az vm list --query "[?name=='$VM_NAME']" -o json)
         
         if [ "$VM_INFO" == "[]" ]; then
@@ -578,6 +608,7 @@ stop_vm() {
     fi
     
     echo -e "${YELLOW}Stopping and deallocating VM: $VM_NAME${NC}"
+    print_az_cmd "az vm deallocate --name $VM_NAME --resource-group $RG_NAME"
     az vm deallocate --name "$VM_NAME" --resource-group "$RG_NAME"
     
     if [ $? -eq 0 ]; then
