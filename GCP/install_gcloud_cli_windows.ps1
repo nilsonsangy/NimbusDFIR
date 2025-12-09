@@ -204,9 +204,16 @@ Write-Host "==========================================" -ForegroundColor $Succes
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor $InfoColor
 Write-Host "  1. Restart your terminal to refresh PATH" -ForegroundColor White
-Write-Host "  2. Run: gcloud init" -ForegroundColor White
-Write-Host "  3. Authenticate with: gcloud auth login" -ForegroundColor White
 Write-Host ""
-Write-Host "To verify installation, run:" -ForegroundColor $InfoColor
+Write-Host "  2. Option A - Quick setup (recommended):" -ForegroundColor $InfoColor
+Write-Host "     gcloud init" -ForegroundColor White
+Write-Host "     (Authenticates + configures project, region, zone)" -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "  2. Option B - Manual setup:" -ForegroundColor $InfoColor
+Write-Host "     gcloud auth login" -ForegroundColor White
+Write-Host "     gcloud config set project YOUR_PROJECT_ID" -ForegroundColor White
+Write-Host "     gcloud config set compute/region us-central1" -ForegroundColor White
+Write-Host ""
+Write-Host "To verify installation:" -ForegroundColor $InfoColor
 Write-Host "  gcloud version" -ForegroundColor White
 Write-Host ""
