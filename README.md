@@ -51,7 +51,10 @@ Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud 
 | | mysql_insert_mock_data.sh / .ps1 / .py | Insert mock data into Azure MySQL |
 | | storage_account_manager.sh / .ps1 / .py | Manage Azure Storage Accounts (AAD, TLS, role assignment) |
 | | vm_manager.sh / .ps1 / .py | Manage Azure VMs (list, create, start, stop, delete) |
-| GCP | hello_gcp.py | Tests GCP connection and prints account email and regions |
+| GCP | compute_engine_manager.ps1 | Manage GCP Compute Engine VMs (list, create, start, stop, delete) |
+| | hello_gcp.ps1 | Tests GCP connection and prints project info |
+| | hello_gcp.py | Tests GCP connection and prints account email and regions |
+| | install_gcloud_cli_windows.ps1 | Installs Google Cloud CLI on Windows (user-level, no admin required) |
 
 **Note:** Scripts are available in multiple formats:
 - `.sh` - Bash (macOS/Linux)
