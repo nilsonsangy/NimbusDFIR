@@ -530,20 +530,7 @@ if ($enableActivity -eq "y") {
         --name "subscription-activitylogs" `
         --resource "/subscriptions/$subscriptionId" `
         --workspace $workspaceId `
-        --logs '[
-            {
-                "category":"Administrative",
-                "enabled":true
-            },
-            {
-                "category":"Security",
-                "enabled":true
-            },
-            {
-                "category":"Policy",
-                "enabled":true
-            }
-        ]' | Out-Null
+        --logs '[{"category":"Administrative","enabled":true},{"category":"Security","enabled":true},{"category":"Policy","enabled":true}]' | Out-Null
 
     Write-Host "Activity Logs enabled." -ForegroundColor Green
 }
