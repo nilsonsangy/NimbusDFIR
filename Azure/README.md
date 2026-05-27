@@ -5,7 +5,7 @@ This directory contains forensic and incident response tools for Azure environme
 ---
 
 ## Table of Contents
-- [Installation Azure CLI](#installation-azure-cli)
+- [Azure CLI Installation](#azure-cli-installation)
 - [Connection Testing](#connection-testing)
 - [Blob Storage Management](#blob-storage-management)
 - [Storage Account Management](#storage-account-management)
@@ -20,9 +20,6 @@ This directory contains forensic and incident response tools for Azure environme
 |--------|-------------|
 | blob_storage_manager.sh / .ps1 / .py | Manage Azure Blob Storage containers and blobs |
 | hello_az.sh / .ps1 / .py | Tests Azure connection and prints account info and subscriptions |
-| install_azure_cli_linux.sh | Installs Azure CLI on Linux |
-| install_azure_cli_macos.sh | Installs Azure CLI on macOS |
-| install_azure_cli_windows.ps1 | Installs Azure CLI on Windows with automatic configuration |
 | install_mysql_windows.ps1 | Installs MySQL Community Server on Windows with PATH configuration |
 | mysql_connect.sh / .ps1 / .py | Connect to Azure MySQL Flexible Server (public or private via jump server) |
 | mysql_dump_database.sh / .ps1 / .py | Dump Azure MySQL databases |
@@ -32,24 +29,13 @@ This directory contains forensic and incident response tools for Azure environme
 
 ---
 
-## Installation Azure CLI
+## Azure CLI Installation
 
-### install_azure_cli_macos.sh / install_azure_cli_linux.sh / install_azure_cli_windows.ps1
-Install Azure CLI on macOS, Linux, or Windows.
+Windows:
 
-```bash
-# Install Azure CLI (macOS)
-./install_azure_cli_macos.sh
-# Install Azure CLI (Linux)
-./install_azure_cli_linux.sh
-# Install Azure CLI (Windows)
-./install_azure_cli_windows.ps1
-
-# Verify installation
-az --version
+```powershell
+winget install Microsoft.AzureCLI
 ```
-
-**Note:** The macOS script will automatically install Homebrew if it's not already present. It supports both Intel and Apple Silicon Macs.
 
 ---
 

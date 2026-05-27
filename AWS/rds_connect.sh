@@ -21,6 +21,13 @@ if ! command -v aws &> /dev/null; then
     exit 1
 fi
 
+exec 3>&1
+
+aws() {
+    echo -e "${CYAN}[AWS CLI] aws $*${NC}" >&3
+    command aws "$@"
+}
+
 # Check if mysql client is installed
 if ! command -v mysql &> /dev/null; then
     echo -e "${RED}Error: MySQL client is not installed${NC}"

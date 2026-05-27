@@ -11,6 +11,19 @@ Get-Content $envFile | ForEach-Object {
     }
 }
 
+$script:AwsCliPath = (Get-Command aws -CommandType Application -ErrorAction SilentlyContinue).Source
+if (-not $script:AwsCliPath) {
+    Write-Host "Error: AWS CLI is not installed or not in PATH" -ForegroundColor Red
+    Write-Host "Please install AWS CLI from: https://aws.amazon.com/cli/" -ForegroundColor Yellow
+    exit 1
+}
+
+function aws {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+    Write-Host "[AWS CLI] aws $($Arguments -join ' ')" -ForegroundColor DarkCyan
+    & $script:AwsCliPath @Arguments
+}
+
 # Configure AWS CLI with loaded credentials
 aws configure set aws_access_key_id $env:AWS_ACCESS_KEY_ID
 aws configure set aws_secret_access_key $env:AWS_SECRET_ACCESS_KEY

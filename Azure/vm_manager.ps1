@@ -274,9 +274,9 @@ function New-VM {
     # Ask about public IP
     Write-Host ""
     $publicIP = Read-Host "Assign public IP? (y/N)"
-    if ($publicIP -ne "y" -and $publicIP -ne "Y") {
-        $cmd += " --public-ip-address ''"
-        $cmdDisplay += " --public-ip-address ''"
+    if ($publicIP -eq "y" -or $publicIP -eq "Y") {
+        $cmd += " --public-ip-address"
+        $cmdDisplay += " --public-ip-address"
     }
     
     Write-Host ""
@@ -393,6 +393,7 @@ function Remove-VM {
         if ($deleteResources -eq "y") {
             Write-Host "Cleaning up all associated resources..." -ForegroundColor Yellow
             Write-Host ""
+            $cleanupHadErrors = $false
             
             # Delete NICs
             Write-Host "[INFO] Deleting Network Interfaces..." -ForegroundColor Blue
@@ -407,6 +408,7 @@ function Remove-VM {
                         Write-Host "    ✓ NIC deleted: $nic" -ForegroundColor Green
                     } else {
                         Write-Host "    ✗ Failed to delete NIC: $nic" -ForegroundColor Red
+                        $cleanupHadErrors = $true
                     }
                 }
             }
@@ -424,6 +426,7 @@ function Remove-VM {
                         Write-Host "    ✓ Public IP deleted: $publicIP" -ForegroundColor Green
                     } else {
                         Write-Host "    ✗ Failed to delete Public IP: $publicIP" -ForegroundColor Red
+                        $cleanupHadErrors = $true
                     }
                 }
             }
@@ -441,6 +444,7 @@ function Remove-VM {
                         Write-Host "    ✓ NSG deleted: $nsg" -ForegroundColor Green
                     } else {
                         Write-Host "    ✗ Failed to delete NSG: $nsg" -ForegroundColor Red
+                        $cleanupHadErrors = $true
                     }
                 }
             }
@@ -458,6 +462,7 @@ function Remove-VM {
                         Write-Host "    ✓ Disk deleted: $disk" -ForegroundColor Green
                     } else {
                         Write-Host "    ✗ Failed to delete disk: $disk" -ForegroundColor Red
+                        $cleanupHadErrors = $true
                     }
                 }
             }
@@ -470,17 +475,26 @@ function Remove-VM {
                 if ($vnet.Trim()) {
                     Write-Host "  Deleting VNET: $vnet" -ForegroundColor Yellow
                     Write-AzCommand "az network vnet delete --resource-group $rgName --name $vnet"
-                    az network vnet delete --resource-group $rgName --name $vnet
+                    $vnetDeleteOutput = az network vnet delete --resource-group $rgName --name $vnet 2>&1
                     if ($LASTEXITCODE -eq 0) {
                         Write-Host "    ✓ VNET deleted: $vnet" -ForegroundColor Green
                     } else {
-                        Write-Host "    ✗ Failed to delete VNET: $vnet" -ForegroundColor Red
+                        if ($vnetDeleteOutput -match "InUseSubnetCannotBeDeleted") {
+                            Write-Host "    ! VNET not deleted: subnet is still in use by another resource" -ForegroundColor Yellow
+                        } else {
+                            Write-Host "    ✗ Failed to delete VNET: $vnet" -ForegroundColor Red
+                        }
+                        $cleanupHadErrors = $true
                     }
                 }
             }
             
             Write-Host ""
-            Write-Host "✓ All resources cleanup completed" -ForegroundColor Green
+            if ($cleanupHadErrors) {
+                Write-Host "! Resource cleanup finished with warnings" -ForegroundColor Yellow
+            } else {
+                Write-Host "✓ All resources cleanup completed" -ForegroundColor Green
+            }
         }
     } else {
         Write-Host "✗ Failed to delete VM" -ForegroundColor Red

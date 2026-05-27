@@ -6,7 +6,7 @@ This directory contains forensic and incident response tools for AWS environment
 
 
 ## 📋 Table of Contents
-- [Installation AWS CLI](#installation-aws-cli)
+- [AWS CLI Installation](#aws-cli-installation)
 - [Connection Testing](#connection-testing)
 - [EC2 Management](#ec2-management)
 - [EC2 Evidence Preservation](#ec2-evidence-preservation)
@@ -26,8 +26,6 @@ This directory contains forensic and incident response tools for AWS environment
 | ec2_manager.sh / .ps1 / .py | Manage EC2 instances (list, create, start, stop, terminate) |
 | forensic_disk_collection.ps1 | Automated forensic disk collection from EC2 |
 | hello_aws.py | Tests AWS connection and prints account ID and regions |
-| install_aws_cli_macos.sh | Installs AWS CLI v2 on macOS |
-| install_aws_cli_windows.ps1 | Installs AWS CLI on Windows with automatic configuration |
 | rds_connect.sh | Connect to RDS instances (public or private via jump server) |
 | rds_dump_database.sh | Dump RDS databases with interactive or direct mode |
 | rds_insert_mock_data.sh | Insert mock e-commerce data into RDS databases |
@@ -37,17 +35,12 @@ This directory contains forensic and incident response tools for AWS environment
 
 ---
 
-## Installation AWS CLI
+## AWS CLI Installation
 
-### install_aws_cli_macos.sh
-Install AWS CLI v2 on macOS.
+Windows:
 
-```bash
-# Install AWS CLI
-./install_aws_cli_macos.sh
-
-# Verify installation
-aws --version
+```powershell
+winget install Amazon.AWSCLI
 ```
 
 ---

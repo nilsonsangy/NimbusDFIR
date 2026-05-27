@@ -22,7 +22,7 @@ if ! command -v az &> /dev/null; then
     echo -e "${RED}[ERROR]${NC} Azure CLI is not installed"
     echo ""
     echo "To install Azure CLI, run:"
-    echo -e "  ${GREEN}./install_azure_cli_macos.sh${NC}"
+    echo -e "  ${GREEN}winget install Microsoft.AzureCLI${NC}"
     exit 1
 fi
 

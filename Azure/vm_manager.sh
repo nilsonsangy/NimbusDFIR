@@ -23,7 +23,7 @@ print_az_cmd() {
 if ! command -v az &> /dev/null; then
     echo -e "${RED}Error: Azure CLI is not installed${NC}"
     echo "Please install Azure CLI first"
-    echo "Run: ./install_azure_cli_macos.sh"
+    echo "Run: winget install Microsoft.AzureCLI"
     exit 1
 fi
 

@@ -20,6 +20,13 @@ if ! command -v aws &> /dev/null; then
     exit 1
 fi
 
+exec 3>&1
+
+aws() {
+    echo -e "${CYAN}[AWS CLI] aws $*${NC}" >&3
+    command aws "$@"
+}
+
 # Check if AWS credentials are configured
 check_aws_credentials() {
     if ! aws sts get-caller-identity &> /dev/null; then
@@ -97,7 +104,7 @@ create_bucket() {
     if [[ -z "$bucket_name" ]]; then
         echo -e "${RED}Error: Bucket name cannot be empty${NC}"
         return 1
-    }
+    fi
     
     echo -e "${YELLOW}Creating bucket '$bucket_name'...${NC}"
     echo -e "${CYAN}[AWS CLI] aws s3api create-bucket --bucket $bucket_name${NC}"

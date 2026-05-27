@@ -18,13 +18,20 @@ param(
 # Check if AWS CLI is installed
 function Test-AwsCli {
     try {
-        $null = Get-Command aws -ErrorAction Stop
+        $null = Get-Command aws -CommandType Application -ErrorAction Stop
         return $true
     }
     catch {
         Write-Host "Error: AWS CLI is not installed" -ForegroundColor Red
         return $false
     }
+}
+
+$script:AwsCliPath = (Get-Command aws -CommandType Application -ErrorAction SilentlyContinue).Source
+function aws {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+    Write-Host "[AWS CLI] aws $($Arguments -join ' ')" -ForegroundColor Magenta
+    & $script:AwsCliPath @Arguments
 }
 
 # Check if AWS credentials are configured

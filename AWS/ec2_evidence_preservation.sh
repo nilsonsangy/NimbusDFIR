@@ -62,6 +62,13 @@ show_usage() {
     echo
 }
 
+exec 3>&1
+
+aws() {
+    echo -e "${NC}[AWS CLI] aws $*${NC}" >&3
+    command aws "$@"
+}
+
 # Test AWS CLI and credentials
 test_aws_credentials() {
     if ! command -v aws &> /dev/null; then

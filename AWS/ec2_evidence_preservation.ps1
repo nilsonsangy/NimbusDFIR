@@ -15,6 +15,19 @@ param(
     [string]$InstanceId
 )
 
+$script:AwsCliPath = (Get-Command aws -CommandType Application -ErrorAction SilentlyContinue).Source
+if (-not $script:AwsCliPath) {
+    Write-Host "Error: AWS CLI is not installed or not in PATH" -ForegroundColor Red
+    Write-Host "Please install AWS CLI from: https://aws.amazon.com/cli/" -ForegroundColor Yellow
+    exit 1
+}
+
+function aws {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+    Write-Host "[AWS CLI] aws $($Arguments -join ' ')" -ForegroundColor DarkCyan
+    & $script:AwsCliPath @Arguments
+}
+
 # Check if AWS CLI is installed
 function Test-AwsCli {
     try {

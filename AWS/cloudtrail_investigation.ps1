@@ -23,6 +23,18 @@ Get-Content $envPath | ForEach-Object {
     }
 }
 
+$script:AwsCliPath = (Get-Command aws -CommandType Application -ErrorAction SilentlyContinue).Source
+if (-not $script:AwsCliPath) {
+    Write-Error "AWS CLI not found. Please install and configure AWS CLI."
+    exit 1
+}
+
+function aws {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+    Write-Host "[AWS CLI] aws $($Arguments -join ' ')" -ForegroundColor DarkCyan
+    & $script:AwsCliPath @Arguments
+}
+
 # Confirm credentials loaded correctly
 Write-Host "Testing AWS credentials..."
 try {

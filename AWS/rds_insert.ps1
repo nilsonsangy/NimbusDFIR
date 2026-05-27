@@ -8,13 +8,24 @@ param(
     [int]$RowCount = 10
 )
 
+$script:AwsCliPath = (Get-Command aws -CommandType Application -ErrorAction SilentlyContinue).Source
+if (-not $script:AwsCliPath) {
+    throw "AWS CLI not found. Please install and configure AWS CLI."
+}
+
+function aws {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+    Write-Host "[AWS CLI] aws $($Arguments -join ' ')" -ForegroundColor DarkCyan
+    & $script:AwsCliPath @Arguments
+}
+
 function Show-Usage {
     Write-Host "AWS RDS Insert Mock Data (PowerShell)" -ForegroundColor Cyan
     Write-Host "Usage: .\\rds_insert.ps1 [-InstanceId <id>] [-Engine mysql|postgres] [-User <user>] [-Password <pass>] [-Database <db>] [-TableName <name>] [-RowCount <n>]"
 }
 
 function Test-AwsCli {
-    if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
+    if (-not (Get-Command aws -CommandType Application -ErrorAction SilentlyContinue)) {
         throw "AWS CLI not found. Please install and configure AWS CLI."
     }
 }

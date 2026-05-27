@@ -32,8 +32,6 @@ Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud 
 | | ec2_manager.sh / .ps1 / .py | Manage EC2 instances (list, create, start, stop, terminate) |
 | | forensic_disk_collection.ps1 | Automated forensic disk collection from EC2 |
 | | hello_aws.py | Tests AWS connection and prints account ID and regions |
-| | install_aws_cli_macos.sh | Installs AWS CLI v2 on macOS |
-| | install_aws_cli_windows.ps1 | Installs AWS CLI on Windows with automatic configuration |
 | | rds_connect.sh | Connect to RDS instances (public or private via jump server) |
 | | rds_dump_database.sh | Dump RDS databases with interactive or direct mode |
 | | rds_insert_mock_data.sh | Insert mock e-commerce data into RDS databases |
@@ -42,9 +40,6 @@ Resources and tools for Digital Forensics and Incident Response (DFIR) in cloud 
 | | s3_manager.sh / .ps1 / .py | Manage S3 buckets (list, create, delete, upload, download, dump) |
 | Azure | blob_storage_manager.sh / .ps1 / .py | Manage Azure Blob Storage containers and blobs |
 | | hello_az.sh / .ps1 / .py | Tests Azure connection and prints account info and subscriptions |
-| | install_azure_cli_linux.sh | Installs Azure CLI on Linux |
-| | install_azure_cli_macos.sh | Installs Azure CLI on macOS |
-| | install_azure_cli_windows.ps1 | Installs Azure CLI on Windows with automatic configuration |
 | | install_mysql_windows.ps1 | Installs MySQL Community Server on Windows with PATH configuration |
 | | mysql_connect.sh / .ps1 / .py | Connect to Azure MySQL Flexible Server (public or private via jump server) |
 | | mysql_dump_database.sh / .ps1 / .py | Dump Azure MySQL databases |
