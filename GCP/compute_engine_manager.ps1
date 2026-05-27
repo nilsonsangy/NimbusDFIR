@@ -68,6 +68,49 @@ function Test-GcloudProject {
     }
 }
 
+# Check if Compute Engine API is enabled
+function Test-GcloudComputeApi {
+    try {
+        Write-GcloudCommand "gcloud services list --enabled --filter=`"name:compute.googleapis.com`" --format=`"value(name)`""
+        $computeApi = gcloud services list --enabled --filter="name:compute.googleapis.com" --format="value(name)" 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: Unable to verify Compute Engine API status" -ForegroundColor Red
+            return $false
+        }
+
+        if ([string]::IsNullOrWhiteSpace($computeApi)) {
+            Write-Host "Error: Compute Engine API is not enabled" -ForegroundColor Red
+            Write-Host "You must enable it before using this manager" -ForegroundColor Yellow
+            Write-Host "Please run: gcloud services enable compute.googleapis.com" -ForegroundColor Yellow
+            Write-Host ""
+
+            $enableApi = Read-Host "Enable the Compute Engine API now? (Y/n)"
+            if ($enableApi -match '^(n|N|no|NO)$') {
+                return $false
+            }
+
+            Write-Host "Enabling Compute Engine API..." -ForegroundColor Yellow
+            Write-GcloudCommand "gcloud services enable compute.googleapis.com"
+            gcloud services enable compute.googleapis.com
+
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Error: Failed to enable Compute Engine API" -ForegroundColor Red
+                Write-Host "Please verify billing and permissions, then try again" -ForegroundColor Yellow
+                return $false
+            }
+
+            Write-Host "✓ Compute Engine API enabled" -ForegroundColor Green
+        }
+
+        return $true
+    }
+    catch {
+        Write-Host "Error: Unable to verify Compute Engine API status" -ForegroundColor Red
+        return $false
+    }
+}
+
 # Display usage information
 function Show-Usage {
     Write-Host "==========================================" -ForegroundColor Blue
@@ -561,6 +604,10 @@ if (-not (Test-GcloudAuth)) {
 }
 
 if (-not (Test-GcloudProject)) {
+    exit 1
+}
+
+if (-not (Test-GcloudComputeApi)) {
     exit 1
 }
 

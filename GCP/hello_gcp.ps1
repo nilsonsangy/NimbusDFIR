@@ -15,6 +15,14 @@ Write-Host "Hello GCP - Connection Test" -ForegroundColor Blue
 Write-Host "==========================================" -ForegroundColor Blue
 Write-Host ""
 
+function Show-GcpNextSteps {
+    Write-Host "Next steps:" -ForegroundColor Yellow
+    Write-Host "  1. Log in:             gcloud auth login" -ForegroundColor Cyan
+    Write-Host "  2. List projects:      gcloud projects list" -ForegroundColor Cyan
+    Write-Host "  3. Set a project:      gcloud config set project YOUR_PROJECT_ID" -ForegroundColor Cyan
+    Write-Host "  4. Verify the project: gcloud config get-value project" -ForegroundColor Cyan
+}
+
 # Check if gcloud CLI is installed
 Write-Host "[1/4] Checking if gcloud CLI is installed..." -ForegroundColor Cyan
 try {
@@ -47,7 +55,7 @@ if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($account)) {
     Write-Host "  ✗ Not authenticated to GCP" -ForegroundColor Red
     Write-Host ""
     Write-Host "Please authenticate:" -ForegroundColor Yellow
-    Write-Host "  Run: gcloud auth login" -ForegroundColor Cyan
+    Show-GcpNextSteps
     exit 1
 }
 
@@ -61,7 +69,7 @@ if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($project) -and $p
     Write-Host "  ✗ No project configured" -ForegroundColor Red
     Write-Host ""
     Write-Host "Please set a project:" -ForegroundColor Yellow
-    Write-Host "  Run: gcloud config set project YOUR_PROJECT_ID" -ForegroundColor Cyan
+    Show-GcpNextSteps
     exit 1
 }
 

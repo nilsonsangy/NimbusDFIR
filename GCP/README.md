@@ -15,6 +15,7 @@ This directory contains scripts for managing and investigating resources in Goog
   - Delete VM instances
   - Supports preemptible (spot) instances for cost savings
   - Auto-detects zones and validates permissions
+  - Verifies the Compute Engine API and can enable it on first run if needed
 
 ### Connection Testing
 - **`hello_gcp.ps1`** - Test GCP connectivity and authentication
