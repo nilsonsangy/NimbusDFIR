@@ -274,9 +274,10 @@ function New-VM {
     # Ask about public IP
     Write-Host ""
     $publicIP = Read-Host "Assign public IP? (y/N)"
-    if ($publicIP -eq "y" -or $publicIP -eq "Y") {
-        $cmd += " --public-ip-address"
-        $cmdDisplay += " --public-ip-address"
+    if ($publicIP -ne "y" -and $publicIP -ne "Y") {
+        # Azure CLI expects a value for --public-ip-address; empty string means no public IP.
+        $cmd += ' --public-ip-address ""'
+        $cmdDisplay += ' --public-ip-address ""'
     }
     
     Write-Host ""
